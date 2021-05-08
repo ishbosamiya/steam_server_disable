@@ -22,7 +22,7 @@ impl ServerObject {
         Self { json_obj }
     }
 
-    pub fn get_server_ips(&self, server_abr: &str) -> Option<Vec<&str>> {
+    pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&str>, ()> {
         let obj = &self.json_obj;
 
         let obj = &obj["pops"];
@@ -40,10 +40,10 @@ impl ServerObject {
                 }
             }
         } else {
-            return None;
+            return Err(());
         }
 
-        return Some(ips);
+        return Ok(ips);
     }
 
     pub fn get_server_list(&self) -> Vec<&str> {
@@ -60,5 +60,35 @@ impl ServerObject {
         }
 
         return names;
+    }
+
+    fn ban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), ()> {
+        let rule = format!("-s {} -j DROP", ip);
+        ipt.append_replace("filter", "INPUT", &rule)
+            .or_else(|_| return Err(()))?;
+        return Ok(());
+    }
+
+    fn unban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), ()> {
+        let rule = format!("-s {} -j DROP", ip);
+        ipt.delete_all("filter", "INPUT", &rule)
+            .or_else(|_| return Err(()))?;
+        return Ok(());
+    }
+
+    pub fn ban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), ()> {
+        let ip_list = self.get_server_ips(server_abr)?;
+        for ip in ip_list {
+            self.ban_ip(ipt, ip)?;
+        }
+        return Ok(());
+    }
+
+    pub fn unban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), ()> {
+        let ip_list = self.get_server_ips(server_abr)?;
+        for ip in ip_list {
+            self.unban_ip(ipt, ip)?;
+        }
+        return Ok(());
     }
 }
