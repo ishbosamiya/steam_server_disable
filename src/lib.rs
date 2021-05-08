@@ -22,12 +22,12 @@ impl ServerObject {
         Self { json_obj }
     }
 
-    pub fn get_server_ips(&self, server: &str) -> Vec<&str> {
+    pub fn get_server_ips(&self, server_abr: &str) -> Option<Vec<&str>> {
         let obj = &self.json_obj;
 
         let obj = &obj["pops"];
 
-        let server = &obj[server];
+        let server = &obj[server_abr];
 
         let mut ips = Vec::new();
 
@@ -40,10 +40,10 @@ impl ServerObject {
                 }
             }
         } else {
-            panic!("couldn't get relays");
+            return None;
         }
 
-        return ips;
+        return Some(ips);
     }
 
     pub fn get_server_list(&self) -> Vec<&str> {
