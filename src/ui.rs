@@ -63,7 +63,7 @@ impl Sandbox for UI {
             .width(Length::Fill)
             .spacing(10);
         for (server, (enable_button, disable_button)) in &mut self.buttons {
-            let mut row = Row::new();
+            let mut row = Row::new().spacing(10);
             row = row.push(Text::new(server.to_string()).size(20));
             row = row.push(
                 Button::new(enable_button, Text::new("Enable"))
