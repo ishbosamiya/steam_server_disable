@@ -1,4 +1,4 @@
-use iced::{button, Button, Column, Element, Sandbox, Text};
+use iced::{button, scrollable, Button, Element, Length, Sandbox, Scrollable, Text};
 
 use crate::ServerObject;
 
@@ -6,6 +6,7 @@ struct IPTables(iptables::IPTables);
 
 #[derive(Default)]
 pub struct UI {
+    scroll: scrollable::State,
     server_obj: ServerObject,
     ipt: IPTables,
     buttons: Vec<(String, (button::State, button::State))>,
@@ -58,18 +59,20 @@ impl Sandbox for UI {
     }
 
     fn view(&mut self) -> Element<Message> {
-        let mut column = Column::new().padding(20);
+        let mut content = Scrollable::new(&mut self.scroll)
+            .width(Length::Fill)
+            .spacing(10);
         for (server, (enable_button, disable_button)) in &mut self.buttons {
-            column = column.push(Text::new(server.to_string()).size(20));
-            column = column.push(
+            content = content.push(Text::new(server.to_string()).size(20));
+            content = content.push(
                 Button::new(enable_button, Text::new("Enable"))
                     .on_press(Message::EnableServer(server.to_string())),
             );
-            column = column.push(
+            content = content.push(
                 Button::new(disable_button, Text::new("Disable"))
                     .on_press(Message::DisableServer(server.to_string())),
             );
         }
-        column.into()
+        content.into()
     }
 }
