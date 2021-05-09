@@ -8,6 +8,12 @@ pub struct ServerObject {
     json_obj: json::JsonValue,
 }
 
+impl Default for ServerObject {
+    fn default() -> Self {
+        return Self::new();
+    }
+}
+
 impl ServerObject {
     pub fn new() -> Self {
         let mut downloader = downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json");
