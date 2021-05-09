@@ -1,4 +1,5 @@
 pub mod downloader;
+pub mod ui;
 
 use std::fs::File;
 use std::io::prelude::*;
