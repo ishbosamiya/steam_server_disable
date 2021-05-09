@@ -1,4 +1,4 @@
-use iced::{button, scrollable, Button, Element, Length, Sandbox, Scrollable, Text};
+use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
 
 use crate::ServerObject;
 
@@ -63,15 +63,17 @@ impl Sandbox for UI {
             .width(Length::Fill)
             .spacing(10);
         for (server, (enable_button, disable_button)) in &mut self.buttons {
-            content = content.push(Text::new(server.to_string()).size(20));
-            content = content.push(
+            let mut row = Row::new();
+            row = row.push(Text::new(server.to_string()).size(20));
+            row = row.push(
                 Button::new(enable_button, Text::new("Enable"))
                     .on_press(Message::EnableServer(server.to_string())),
             );
-            content = content.push(
+            row = row.push(
                 Button::new(disable_button, Text::new("Disable"))
                     .on_press(Message::DisableServer(server.to_string())),
             );
+            content = content.push(row);
         }
         content.into()
     }
