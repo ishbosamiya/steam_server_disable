@@ -8,6 +8,26 @@ pub struct ServerObject {
     json_obj: json::JsonValue,
 }
 
+pub enum ServerState {
+    AllDisabled,
+    SomeDisabled,
+    NoneDisabled,
+}
+
+impl std::fmt::Display for ServerState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ServerState::AllDisabled => "All Disabled",
+                ServerState::SomeDisabled => "Some Disabled",
+                ServerState::NoneDisabled => "None Disabled",
+            }
+        )
+    }
+}
+
 impl Default for ServerObject {
     fn default() -> Self {
         return Self::new();
@@ -16,17 +36,24 @@ impl Default for ServerObject {
 
 impl ServerObject {
     pub fn new() -> Self {
-        let mut downloader = downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json");
         let file_path = "network_datagram_config.json";
-        downloader.store_to_file(file_path);
-
-        let mut file = File::open(file_path).unwrap();
+        let mut file = File::open(file_path)
+            .or_else(|_| {
+                Self::download_file();
+                File::open(file_path)
+            })
+            .expect("didn't find the file, tried to download, but even that might have failed");
         let mut json_data = String::new();
         file.read_to_string(&mut json_data).unwrap();
 
         let json_obj = json::parse(&json_data).unwrap();
-
         Self { json_obj }
+    }
+
+    pub fn download_file() {
+        let mut downloader = downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json");
+        let file_path = "network_datagram_config.json";
+        downloader.store_to_file(file_path);
     }
 
     pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&str>, ()> {
@@ -67,6 +94,35 @@ impl ServerObject {
         }
 
         return names;
+    }
+
+    pub fn get_server_state(
+        &self,
+        ipt: &iptables::IPTables,
+        server_abr: &str,
+    ) -> Result<ServerState, ()> {
+        let ip_list = self.get_server_ips(server_abr)?;
+        let mut all_dropped = true;
+        let mut one_exists = false;
+        for ip in ip_list {
+            let rule = format!("-s {} -j DROP", ip);
+            if let Ok(exists) = ipt.exists("filter", "INPUT", &rule) {
+                if exists {
+                    one_exists = true;
+                } else {
+                    all_dropped = false;
+                }
+            } else {
+                all_dropped = false;
+            }
+        }
+        if all_dropped {
+            return Ok(ServerState::AllDisabled);
+        }
+        if one_exists {
+            return Ok(ServerState::SomeDisabled);
+        }
+        return Ok(ServerState::NoneDisabled);
     }
 
     fn ban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), ()> {

@@ -1,6 +1,6 @@
 use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
 
-use crate::ServerObject;
+use crate::{ServerObject, ServerState};
 
 struct IPTables(iptables::IPTables);
 
@@ -16,14 +16,21 @@ struct Server {
     abr: String,
     enable_button: button::State,
     disable_button: button::State,
+    state: ServerState,
 }
 
 impl Server {
-    fn new(abr: String, enable_button: button::State, disable_button: button::State) -> Self {
+    fn new(
+        abr: String,
+        enable_button: button::State,
+        disable_button: button::State,
+        state: ServerState,
+    ) -> Self {
         return Self {
             abr,
             enable_button,
             disable_button,
+            state,
         };
     }
 }
@@ -48,6 +55,12 @@ impl Sandbox for UI {
         let server_list = ui.server_obj.get_server_list();
         let server_list: Vec<String> = server_list
             .iter()
+            .filter(|server| {
+                if let Ok(_) = ui.server_obj.get_server_ips(server) {
+                    return true;
+                }
+                return false;
+            })
             .map(|server| server.to_string())
             .collect();
         server_list.iter().for_each(|server| {
@@ -55,6 +68,9 @@ impl Sandbox for UI {
                 server.to_string(),
                 button::State::new(),
                 button::State::new(),
+                ui.server_obj
+                    .get_server_state(&ui.ipt.0, server)
+                    .expect("couldnt get state of some server"),
             ))
         });
         return ui;
@@ -66,11 +82,33 @@ impl Sandbox for UI {
 
     fn update(&mut self, message: Message) {
         match message {
-            Message::EnableServer(server) => {
-                self.server_obj.unban_server(&self.ipt.0, &server).unwrap();
+            Message::EnableServer(server_abr) => {
+                self.server_obj
+                    .unban_server(&self.ipt.0, &server_abr)
+                    .unwrap();
+                self.buttons
+                    .iter_mut()
+                    .filter(|server| {
+                        if server.abr == server_abr {
+                            return true;
+                        }
+                        return false;
+                    })
+                    .for_each(|server| server.state = ServerState::NoneDisabled);
             }
-            Message::DisableServer(server) => {
-                self.server_obj.ban_server(&self.ipt.0, &server).unwrap();
+            Message::DisableServer(server_abr) => {
+                self.server_obj
+                    .ban_server(&self.ipt.0, &server_abr)
+                    .unwrap();
+                self.buttons
+                    .iter_mut()
+                    .filter(|server| {
+                        if server.abr == server_abr {
+                            return true;
+                        }
+                        return false;
+                    })
+                    .for_each(|server| server.state = ServerState::AllDisabled);
             }
         }
     }
@@ -90,6 +128,7 @@ impl Sandbox for UI {
                 Button::new(&mut server.disable_button, Text::new("Disable"))
                     .on_press(Message::DisableServer(server.abr.clone())),
             );
+            row = row.push(Text::new(format!("{}", server.state)).size(20));
             content = content.push(row);
         }
         content.into()
