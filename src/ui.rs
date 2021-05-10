@@ -10,6 +10,7 @@ pub struct UI {
     server_obj: ServerObject,
     ipt: IPTables,
     buttons: Vec<Server>,
+    download_button: button::State,
 }
 
 struct Server {
@@ -45,6 +46,7 @@ impl Default for IPTables {
 pub enum Message {
     EnableServer(String),
     DisableServer(String),
+    DownloadFile,
 }
 
 impl Sandbox for UI {
@@ -110,6 +112,9 @@ impl Sandbox for UI {
                     })
                     .for_each(|server| server.state = ServerState::AllDisabled);
             }
+            Message::DownloadFile => {
+                ServerObject::download_file();
+            }
         }
     }
 
@@ -117,6 +122,10 @@ impl Sandbox for UI {
         let mut content = Scrollable::new(&mut self.scroll)
             .width(Length::Fill)
             .spacing(10);
+        content = content.push(
+            Button::new(&mut self.download_button, Text::new("Download file"))
+                .on_press(Message::DownloadFile),
+        );
         for server in &mut self.buttons {
             let mut row = Row::new().spacing(10);
             row = row.push(Text::new(server.abr.clone()).size(20));
