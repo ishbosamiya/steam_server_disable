@@ -3,13 +3,31 @@ use std::path::Path;
 
 pub struct Download {}
 
+#[derive(Debug)]
+pub enum Error {
+    Curl(curl::Error),
+    IO(std::io::Error),
+}
+
+impl From<curl::Error> for Error {
+    fn from(error: curl::Error) -> Self {
+        return Error::Curl(error);
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        return Error::IO(error);
+    }
+}
+
 impl Download {
-    pub fn from_url<P>(url: &str, file_path: P)
+    pub fn from_url<P>(url: &str, file_path: P) -> Result<(), Error>
     where
         P: AsRef<Path>,
     {
         let mut easy = Easy::new();
-        easy.url(url).unwrap();
+        easy.url(url)?;
 
         let mut buf = Vec::new();
         {
@@ -20,8 +38,9 @@ impl Download {
                     Ok(data.len())
                 })
                 .unwrap();
-            transfer.perform().unwrap();
+            transfer.perform()?;
         }
-        std::fs::write(file_path, buf).expect("couldn't store file to disk");
+        std::fs::write(file_path, buf)?;
+        return Ok(());
     }
 }
