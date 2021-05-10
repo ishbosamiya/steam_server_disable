@@ -51,9 +51,8 @@ impl ServerObject {
     }
 
     pub fn download_file() {
-        let mut downloader = downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json");
         let file_path = "network_datagram_config.json";
-        downloader.store_to_file(file_path);
+        downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path);
     }
 
     pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&str>, ()> {
