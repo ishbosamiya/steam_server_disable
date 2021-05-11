@@ -1,11 +1,34 @@
 pub mod downloader;
 pub mod ui;
 
+use serde::{Deserialize, Serialize};
+
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 
+#[derive(Serialize, Deserialize)]
 pub struct ServerObject {
-    json_obj: json::JsonValue,
+    revision: usize,
+    certs: Vec<String>,
+    p2p_share_ip: HashMap<String, usize>,
+    pops: HashMap<String, ServerInfo>,
+    relay_public_key: String,
+    revoked_keys: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ServerInfo {
+    desc: Option<String>,
+    geo: Option<Vec<f32>>,
+    groups: Vec<String>,
+    relays: Option<Vec<RelayInfo>>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RelayInfo {
+    ipv4: String,
+    port_range: Vec<usize>,
 }
 
 pub enum ServerState {
@@ -46,8 +69,7 @@ impl ServerObject {
         let mut json_data = String::new();
         file.read_to_string(&mut json_data).unwrap();
 
-        let json_obj = json::parse(&json_data).unwrap();
-        Self { json_obj }
+        serde_json::from_str(&json_data).unwrap()
     }
 
     pub fn download_file() {
@@ -55,44 +77,17 @@ impl ServerObject {
         downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path).unwrap();
     }
 
-    pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&str>, ()> {
-        let obj = &self.json_obj;
-
-        let obj = &obj["pops"];
-
-        let server = &obj[server_abr];
-
-        let mut ips = Vec::new();
-
-        if let json::JsonValue::Array(relays) = &server["relays"] {
-            for relay in relays {
-                if let json::JsonValue::Short(ip) = &relay["ipv4"] {
-                    ips.push(ip.as_str());
-                } else {
-                    panic!("couldn't find ip within relays, got {:?}", relay["ipv4"]);
-                }
-            }
-        } else {
-            return Err(());
-        }
-
+    pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&String>, ()> {
+        let server = self.pops.get(server_abr).ok_or(())?;
+        let relays = server.relays.as_ref().ok_or(())?;
+        let ips = relays.iter().map(|relay| &relay.ipv4).collect();
         return Ok(ips);
     }
 
-    pub fn get_server_list(&self) -> Vec<&str> {
-        let obj = &self.json_obj;
-        let obj = &obj["pops"];
-
-        let mut names = Vec::new();
-        if let json::JsonValue::Object(servers) = &obj {
-            for (server, _) in servers.iter() {
-                names.push(server);
-            }
-        } else {
-            panic!("couldn't find array of servers in pops, got {:?}", obj);
-        }
-
-        return names;
+    pub fn get_server_list(&self) -> Vec<&String> {
+        let mut list: Vec<&String> = self.pops.keys().collect();
+        list.sort();
+        return list;
     }
 
     pub fn get_server_state(
