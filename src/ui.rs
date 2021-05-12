@@ -113,7 +113,8 @@ impl Sandbox for UI {
                     .for_each(|server| server.state = ServerState::AllDisabled);
             }
             Message::DownloadFile => {
-                ServerObject::download_file();
+                ServerObject::download_file()
+                    .expect("couldn't download file, todo: make it not panic");
             }
         }
     }

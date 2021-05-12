@@ -21,6 +21,14 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {}
+
 impl Download {
     pub fn from_url<P>(url: &str, file_path: P) -> Result<(), Error>
     where

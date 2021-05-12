@@ -61,24 +61,33 @@ impl ServerObject {
         let file_path = "network_datagram_config.json";
         let mut file = File::open(file_path)
             .or_else(|_| {
-                Self::download_file();
+                match Self::download_file() {
+                    Ok(_) => {}
+                    Err(error) => {
+                        panic!(
+                        "{} didn't exist, tried to download, check your internet connection? {}",
+                        file_path, error
+                    )
+                    }
+                }
                 File::open(file_path)
             })
             .expect("didn't find the file, tried to download, but even that might have failed");
         let mut json_data = String::new();
         file.read_to_string(&mut json_data).unwrap();
 
-        serde_json::from_str(&json_data).unwrap()
+        serde_json::from_str(&json_data).expect("network datagram config file json structure might have changed, unable to parse, contact developer")
     }
 
-    pub fn download_file() {
+    pub fn download_file() -> Result<(), Error> {
         let file_path = "network_datagram_config.json";
-        downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path).unwrap();
+        downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path)?;
+        Ok(())
     }
 
-    pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&String>, ()> {
-        let server = self.pops.get(server_abr).ok_or(())?;
-        let relays = server.relays.as_ref().ok_or(())?;
+    pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&String>, Error> {
+        let server = self.pops.get(server_abr).ok_or(Error::NoServer)?;
+        let relays = server.relays.as_ref().ok_or(Error::NoRelay)?;
         let ips = relays.iter().map(|relay| &relay.ipv4).collect();
         return Ok(ips);
     }
@@ -93,7 +102,7 @@ impl ServerObject {
         &self,
         ipt: &iptables::IPTables,
         server_abr: &str,
-    ) -> Result<ServerState, ()> {
+    ) -> Result<ServerState, Error> {
         let ip_list = self.get_server_ips(server_abr)?;
         let mut all_dropped = true;
         let mut one_exists = false;
@@ -118,21 +127,21 @@ impl ServerObject {
         return Ok(ServerState::NoneDisabled);
     }
 
-    fn ban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), ()> {
+    fn ban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
         let rule = format!("-s {} -j DROP", ip);
         ipt.append_replace("filter", "INPUT", &rule)
-            .or_else(|_| return Err(()))?;
+            .or_else(|_| return Err(Error::UnsuccessfulBan))?;
         return Ok(());
     }
 
-    fn unban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), ()> {
+    fn unban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
         let rule = format!("-s {} -j DROP", ip);
         ipt.delete_all("filter", "INPUT", &rule)
-            .or_else(|_| return Err(()))?;
+            .or_else(|_| return Err(Error::UnsuccessfulUnban))?;
         return Ok(());
     }
 
-    pub fn ban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), ()> {
+    pub fn ban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), Error> {
         let ip_list = self.get_server_ips(server_abr)?;
         for ip in ip_list {
             self.ban_ip(ipt, ip)?;
@@ -140,7 +149,7 @@ impl ServerObject {
         return Ok(());
     }
 
-    pub fn unban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), ()> {
+    pub fn unban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), Error> {
         let ip_list = self.get_server_ips(server_abr)?;
         for ip in ip_list {
             self.unban_ip(ipt, ip)?;
@@ -148,3 +157,33 @@ impl ServerObject {
         return Ok(());
     }
 }
+
+#[derive(Debug)]
+pub enum Error {
+    Downloader(downloader::Error),
+    IPTables(iptables::error::IptablesError),
+    NoServer,
+    NoRelay,
+    UnsuccessfulBan,
+    UnsuccessfulUnban,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<downloader::Error> for Error {
+    fn from(error: downloader::Error) -> Self {
+        return Error::Downloader(error);
+    }
+}
+
+impl From<iptables::error::IptablesError> for Error {
+    fn from(error: iptables::error::IptablesError) -> Self {
+        return Error::IPTables(error);
+    }
+}
+
+impl std::error::Error for Error {}
