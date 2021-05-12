@@ -11,6 +11,8 @@ pub struct UI {
     ipt: IPTables,
     buttons: Vec<Server>,
     download_button: button::State,
+    enable_all_button: button::State,
+    disable_all_button: button::State,
 }
 
 struct Server {
@@ -46,6 +48,8 @@ impl Default for IPTables {
 pub enum Message {
     EnableServer(String),
     DisableServer(String),
+    EnableAll,
+    DisableAll,
     DownloadFile,
 }
 
@@ -112,6 +116,26 @@ impl Sandbox for UI {
                     })
                     .for_each(|server| server.state = ServerState::AllDisabled);
             }
+            Message::EnableAll => {
+                self.buttons.iter().for_each(|server| {
+                    self.server_obj
+                        .unban_server(&self.ipt.0, &server.abr)
+                        .unwrap();
+                });
+                self.buttons.iter_mut().for_each(|server| {
+                    server.state = ServerState::NoneDisabled;
+                });
+            }
+            Message::DisableAll => {
+                self.buttons.iter().for_each(|server| {
+                    self.server_obj
+                        .ban_server(&self.ipt.0, &server.abr)
+                        .unwrap()
+                });
+                self.buttons.iter_mut().for_each(|server| {
+                    server.state = ServerState::AllDisabled;
+                });
+            }
             Message::DownloadFile => {
                 ServerObject::download_file()
                     .expect("couldn't download file, todo: make it not panic");
@@ -124,8 +148,20 @@ impl Sandbox for UI {
             .width(Length::Fill)
             .spacing(10);
         content = content.push(
-            Button::new(&mut self.download_button, Text::new("Download file"))
-                .on_press(Message::DownloadFile),
+            Row::new()
+                .spacing(10)
+                .push(
+                    Button::new(&mut self.download_button, Text::new("Download file"))
+                        .on_press(Message::DownloadFile),
+                )
+                .push(
+                    Button::new(&mut self.enable_all_button, Text::new("Enable All"))
+                        .on_press(Message::EnableAll),
+                )
+                .push(
+                    Button::new(&mut self.disable_all_button, Text::new("Disable All"))
+                        .on_press(Message::DisableAll),
+                ),
         );
         for server in &mut self.buttons {
             let mut row = Row::new().spacing(10);
