@@ -1,6 +1,6 @@
 use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
 
-use crate::{ServerObject, ServerState};
+use crate::steam_server::{ServerObject, ServerState};
 
 struct IPTables(iptables::IPTables);
 
