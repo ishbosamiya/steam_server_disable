@@ -1,6 +1,8 @@
+use fastping_rs::Pinger;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -85,6 +87,24 @@ impl ServerObject {
         Ok(())
     }
 
+    pub fn get_server_ping(&self, server_abr: &str) -> Result<std::time::Duration, Error> {
+        let (pinger, results) = Pinger::new(None, None).expect("couldn't create pinger");
+
+        let ips = self.get_server_ips(server_abr)?;
+        ips.iter().for_each(|ip| pinger.add_ipaddr(ip));
+        pinger.run_pinger();
+
+        let total_elapsed = results.iter().take(ips.len()).try_fold(
+            std::time::Duration::from_millis(0),
+            |elapsed, result| match result {
+                fastping_rs::PingResult::Idle { addr: _ } => Err(Error::ServerUnreachable),
+                fastping_rs::PingResult::Receive { addr: _, rtt } => Ok(elapsed + rtt),
+            },
+        )?;
+
+        return Ok(total_elapsed / ips.len().try_into().unwrap());
+    }
+
     pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&String>, Error> {
         let server = self.pops.get(server_abr).ok_or(Error::NoServer)?;
         let relays = server.relays.as_ref().ok_or(Error::NoRelay)?;
@@ -166,6 +186,7 @@ pub enum Error {
     NoRelay,
     UnsuccessfulBan,
     UnsuccessfulUnban,
+    ServerUnreachable,
 }
 
 impl std::fmt::Display for Error {
