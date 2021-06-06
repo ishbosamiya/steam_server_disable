@@ -1,7 +1,7 @@
 use crossbeam_channel::{bounded, Receiver};
 use iced::{
     button, executor, scrollable, Application, Button, Clipboard, Command, Element, Length, Row,
-    Scrollable, Text,
+    Scrollable, Subscription, Text,
 };
 use rayon::prelude::*;
 
@@ -62,6 +62,7 @@ pub enum Message {
     EnableAll,
     DisableAll,
     DownloadFile,
+    UpdatePingInfo,
 }
 
 impl Application for UI {
@@ -180,23 +181,24 @@ impl Application for UI {
                 ServerObject::download_file()
                     .expect("couldn't download file, todo: make it not panic");
             }
+            Message::UpdatePingInfo => {
+                // in case there were ping measurements done by the other thread, retrieve them here
+                let ping_receiver = self.ping_receiver.as_ref().unwrap();
+                while let Ok((server, info)) = ping_receiver.try_recv() {
+                    self.buttons
+                        .iter_mut()
+                        .filter(|button| button.abr == server)
+                        .for_each(|button| {
+                            button.ping = info;
+                        });
+                }
+            }
         }
 
         return Command::none();
     }
 
     fn view(&mut self) -> Element<Message> {
-        // in case there were ping measurements done by the other thread, retrieve them here
-        let ping_receiver = self.ping_receiver.as_ref().unwrap();
-        while let Ok((server, info)) = ping_receiver.try_recv() {
-            self.buttons
-                .iter_mut()
-                .filter(|button| button.abr == server)
-                .for_each(|button| {
-                    button.ping = info;
-                });
-        }
-
         let mut content = Scrollable::new(&mut self.scroll)
             .width(Length::Fill)
             .spacing(10);
@@ -246,5 +248,9 @@ impl Application for UI {
             content = content.push(row);
         }
         content.into()
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        iced::time::every(std::time::Duration::from_secs(2)).map(|_| Message::UpdatePingInfo)
     }
 }
