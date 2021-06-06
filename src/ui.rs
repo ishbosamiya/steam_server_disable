@@ -1,5 +1,8 @@
 use crossbeam_channel::{bounded, Receiver};
-use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
+use iced::{
+    button, executor, scrollable, Application, Button, Clipboard, Command, Element, Length, Row,
+    Scrollable, Text,
+};
 use rayon::prelude::*;
 
 use std::sync::{Arc, RwLock};
@@ -61,10 +64,12 @@ pub enum Message {
     DownloadFile,
 }
 
-impl Sandbox for UI {
+impl Application for UI {
+    type Executor = executor::Default;
     type Message = Message;
+    type Flags = ();
 
-    fn new() -> Self {
+    fn new(_flags: ()) -> (Self, Command<Self::Message>) {
         let mut ui = Self::default();
         let server_obj = ui.server_obj.clone();
         let server_obj = server_obj.read().unwrap();
@@ -117,14 +122,18 @@ impl Sandbox for UI {
 
         ui.ping_receiver = Some(ping_receiver);
 
-        return ui;
+        return (ui, Command::none());
     }
 
     fn title(&self) -> String {
         return String::from("Steam Server Toggle");
     }
 
-    fn update(&mut self, message: Message) {
+    fn update(
+        &mut self,
+        message: Self::Message,
+        _clipboard: &mut Clipboard,
+    ) -> Command<Self::Message> {
         let server_obj = self.server_obj.read().unwrap();
         match message {
             Message::EnableServer(server_abr) => {
@@ -172,6 +181,8 @@ impl Sandbox for UI {
                     .expect("couldn't download file, todo: make it not panic");
             }
         }
+
+        return Command::none();
     }
 
     fn view(&mut self) -> Element<Message> {

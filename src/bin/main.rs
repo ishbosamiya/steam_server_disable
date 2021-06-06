@@ -1,4 +1,4 @@
-use iced::Sandbox;
+use iced::Application;
 use steam_server_disable::ui::UI;
 
 fn main() -> iced::Result {
