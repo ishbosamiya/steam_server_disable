@@ -1,4 +1,8 @@
+use crossbeam_channel::{bounded, Receiver};
 use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
+
+use std::sync::{Arc, RwLock};
+use std::thread;
 
 use crate::steam_server::{PingInfo, ServerObject, ServerState};
 
@@ -7,12 +11,13 @@ struct IPTables(iptables::IPTables);
 #[derive(Default)]
 pub struct UI {
     scroll: scrollable::State,
-    server_obj: ServerObject,
+    server_obj: Arc<RwLock<ServerObject>>,
     ipt: IPTables,
     buttons: Vec<Server>,
     download_button: button::State,
     enable_all_button: button::State,
     disable_all_button: button::State,
+    ping_receiver: Option<Receiver<(String, PingInfo)>>,
 }
 
 struct Server {
@@ -60,11 +65,13 @@ impl Sandbox for UI {
 
     fn new() -> Self {
         let mut ui = Self::default();
-        let server_list = ui.server_obj.get_server_list();
+        let server_obj = ui.server_obj.clone();
+        let server_obj = server_obj.read().unwrap();
+        let server_list = server_obj.get_server_list();
         let server_list: Vec<String> = server_list
             .iter()
             .filter(|server| {
-                if let Ok(_) = ui.server_obj.get_server_ips(server) {
+                if let Ok(_) = server_obj.get_server_ips(server) {
                     return true;
                 }
                 return false;
@@ -76,11 +83,39 @@ impl Sandbox for UI {
                 server.to_string(),
                 button::State::new(),
                 button::State::new(),
-                ui.server_obj
+                server_obj
                     .get_server_state(&ui.ipt.0, server)
                     .expect("couldnt get state of some server"),
             ))
         });
+
+        let (ping_sender, ping_receiver) = bounded(server_list.len());
+        let server_obj = ui.server_obj.clone();
+        thread::spawn(|| {
+            let ping_sender = ping_sender;
+            let server_list = server_list;
+            let server_obj = server_obj;
+            let server_obj = server_obj.read().unwrap();
+            loop {
+                server_list
+                    .iter()
+                    .for_each(|server| match server_obj.get_server_ping(&server) {
+                        Ok(rtt) => {
+                            ping_sender
+                                .send((server.to_string(), PingInfo::Rtt(rtt)))
+                                .unwrap();
+                        }
+                        Err(_) => {
+                            ping_sender
+                                .send((server.to_string(), PingInfo::Unreachable))
+                                .unwrap();
+                        }
+                    });
+            }
+        });
+
+        ui.ping_receiver = Some(ping_receiver);
+
         return ui;
     }
 
@@ -89,11 +124,10 @@ impl Sandbox for UI {
     }
 
     fn update(&mut self, message: Message) {
+        let server_obj = self.server_obj.read().unwrap();
         match message {
             Message::EnableServer(server_abr) => {
-                self.server_obj
-                    .unban_server(&self.ipt.0, &server_abr)
-                    .unwrap();
+                server_obj.unban_server(&self.ipt.0, &server_abr).unwrap();
                 self.buttons
                     .iter_mut()
                     .filter(|server| {
@@ -105,9 +139,7 @@ impl Sandbox for UI {
                     .for_each(|server| server.state = ServerState::NoneDisabled);
             }
             Message::DisableServer(server_abr) => {
-                self.server_obj
-                    .ban_server(&self.ipt.0, &server_abr)
-                    .unwrap();
+                server_obj.ban_server(&self.ipt.0, &server_abr).unwrap();
                 self.buttons
                     .iter_mut()
                     .filter(|server| {
@@ -120,20 +152,16 @@ impl Sandbox for UI {
             }
             Message::EnableAll => {
                 self.buttons.iter().for_each(|server| {
-                    self.server_obj
-                        .unban_server(&self.ipt.0, &server.abr)
-                        .unwrap();
+                    server_obj.unban_server(&self.ipt.0, &server.abr).unwrap();
                 });
                 self.buttons.iter_mut().for_each(|server| {
                     server.state = ServerState::NoneDisabled;
                 });
             }
             Message::DisableAll => {
-                self.buttons.iter().for_each(|server| {
-                    self.server_obj
-                        .ban_server(&self.ipt.0, &server.abr)
-                        .unwrap()
-                });
+                self.buttons
+                    .iter()
+                    .for_each(|server| server_obj.ban_server(&self.ipt.0, &server.abr).unwrap());
                 self.buttons.iter_mut().for_each(|server| {
                     server.state = ServerState::AllDisabled;
                 });
@@ -146,6 +174,17 @@ impl Sandbox for UI {
     }
 
     fn view(&mut self) -> Element<Message> {
+        // in case there were ping measurements done by the other thread, retrieve them here
+        let ping_receiver = self.ping_receiver.as_ref().unwrap();
+        while let Ok((server, info)) = ping_receiver.try_recv() {
+            self.buttons
+                .iter_mut()
+                .filter(|button| button.abr == server)
+                .for_each(|button| {
+                    button.ping = info;
+                });
+        }
+
         let mut content = Scrollable::new(&mut self.scroll)
             .width(Length::Fill)
             .spacing(10);
@@ -190,7 +229,7 @@ impl Sandbox for UI {
             row = row.push(
                 Text::new(format!("{}", server.ping))
                     .size(20)
-                    .width(Length::Units(150)),
+                    .width(Length::Units(180)),
             );
             content = content.push(row);
         }
