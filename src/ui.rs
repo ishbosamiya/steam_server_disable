@@ -1,5 +1,6 @@
 use crossbeam_channel::{bounded, Receiver};
 use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
+use rayon::prelude::*;
 
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -97,9 +98,8 @@ impl Sandbox for UI {
             let server_obj = server_obj;
             let server_obj = server_obj.read().unwrap();
             loop {
-                server_list
-                    .iter()
-                    .for_each(|server| match server_obj.get_server_ping(&server) {
+                server_list.par_iter().for_each(|server| {
+                    match server_obj.get_server_ping(&server) {
                         Ok(rtt) => {
                             ping_sender
                                 .send((server.to_string(), PingInfo::Rtt(rtt)))
@@ -110,7 +110,8 @@ impl Sandbox for UI {
                                 .send((server.to_string(), PingInfo::Unreachable))
                                 .unwrap();
                         }
-                    });
+                    }
+                });
             }
         });
 
