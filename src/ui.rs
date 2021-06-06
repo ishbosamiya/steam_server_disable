@@ -1,6 +1,6 @@
 use iced::{button, scrollable, Button, Element, Length, Row, Sandbox, Scrollable, Text};
 
-use crate::steam_server::{ServerObject, ServerState};
+use crate::steam_server::{PingInfo, ServerObject, ServerState};
 
 struct IPTables(iptables::IPTables);
 
@@ -20,6 +20,7 @@ struct Server {
     enable_button: button::State,
     disable_button: button::State,
     state: ServerState,
+    ping: PingInfo,
 }
 
 impl Server {
@@ -34,6 +35,7 @@ impl Server {
             enable_button,
             disable_button,
             state,
+            ping: PingInfo::Unknown,
         };
     }
 }
@@ -165,16 +167,31 @@ impl Sandbox for UI {
         );
         for server in &mut self.buttons {
             let mut row = Row::new().spacing(10);
-            row = row.push(Text::new(server.abr.clone()).size(20));
+            row = row.push(
+                Text::new(server.abr.clone())
+                    .size(20)
+                    .width(Length::Units(60)),
+            );
             row = row.push(
                 Button::new(&mut server.enable_button, Text::new("Enable"))
-                    .on_press(Message::EnableServer(server.abr.clone())),
+                    .on_press(Message::EnableServer(server.abr.clone()))
+                    .width(Length::Units(80)),
             );
             row = row.push(
                 Button::new(&mut server.disable_button, Text::new("Disable"))
-                    .on_press(Message::DisableServer(server.abr.clone())),
+                    .on_press(Message::DisableServer(server.abr.clone()))
+                    .width(Length::Units(80)),
             );
-            row = row.push(Text::new(format!("{}", server.state)).size(20));
+            row = row.push(
+                Text::new(format!("{}", server.state))
+                    .size(20)
+                    .width(Length::Units(150)),
+            );
+            row = row.push(
+                Text::new(format!("{}", server.ping))
+                    .size(20)
+                    .width(Length::Units(150)),
+            );
             content = content.push(row);
         }
         content.into()
