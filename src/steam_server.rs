@@ -1,4 +1,4 @@
-use fastping_rs::Pinger;
+use fastping_rs::{PingResult, Pinger};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -97,8 +97,8 @@ impl ServerObject {
         let total_elapsed = results.iter().take(ips.len()).try_fold(
             std::time::Duration::from_millis(0),
             |elapsed, result| match result {
-                fastping_rs::PingResult::Idle { addr: _ } => Err(Error::ServerUnreachable),
-                fastping_rs::PingResult::Receive { addr: _, rtt } => Ok(elapsed + rtt),
+                PingResult::Idle { addr: _ } => Err(Error::ServerUnreachable),
+                PingResult::Receive { addr: _, rtt } => Ok(elapsed + rtt),
             },
         )?;
 
