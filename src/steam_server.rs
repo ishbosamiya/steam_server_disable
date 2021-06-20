@@ -87,7 +87,7 @@ impl ServerObject {
         Ok(())
     }
 
-    pub fn get_server_ping(&self, server_abr: &str) -> Result<std::time::Duration, Error> {
+    fn _get_server_ping(&self, server_abr: &str) -> Result<std::time::Duration, Error> {
         let (pinger, results) = Pinger::new(None, None).expect("couldn't create pinger");
 
         let ips = self.get_server_ips(server_abr)?;

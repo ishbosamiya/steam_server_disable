@@ -1,13 +1,16 @@
 use crossbeam_channel::{bounded, Receiver};
+use fastping_rs::{PingResult, Pinger};
 use iced::{
     button, executor, scrollable, Application, Button, Clipboard, Command, Element, Length, Row,
     Scrollable, Subscription, Text,
 };
 
 use std::collections::VecDeque;
+use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
+use crate::steam_server;
 use crate::steam_server::{PingInfo, ServerObject, ServerState};
 
 struct IPTables(iptables::IPTables);
@@ -103,19 +106,36 @@ impl Application for UI {
             let server = server.clone();
             let ping_sender = ping_sender.clone();
             let server_obj = server_obj.clone();
-            thread::spawn(move || loop {
+            thread::spawn(move || {
+                let (pinger, results) = Pinger::new(None, None).expect("couldn't create pinger");
                 let server_obj = server_obj.read().unwrap();
-                match server_obj.get_server_ping(&server) {
-                    Ok(rtt) => {
-                        ping_sender
-                            .send((server.to_string(), PingInfo::Rtt(rtt)))
-                            .unwrap();
+                let ips = server_obj.get_server_ips(&server).unwrap();
+                ips.iter().for_each(|ip| pinger.add_ipaddr(ip));
+                pinger.run_pinger();
+                loop {
+                    let total_elapsed = results.iter().take(ips.len()).try_fold(
+                        std::time::Duration::from_millis(0),
+                        |elapsed, result| match result {
+                            PingResult::Idle { addr: _ } => {
+                                Err(steam_server::Error::ServerUnreachable)
+                            }
+                            PingResult::Receive { addr: _, rtt } => Ok(elapsed + rtt),
+                        },
+                    );
+                    match total_elapsed {
+                        Ok(rtt) => {
+                            let rtt = rtt / ips.len().try_into().unwrap();
+                            ping_sender
+                                .send((server.to_string(), PingInfo::Rtt(rtt)))
+                                .expect("couldn't send ping info");
+                        }
+                        Err(_) => {
+                            ping_sender
+                                .send((server.to_string(), PingInfo::Unreachable))
+                                .expect("couldn't send ping info");
+                        }
                     }
-                    Err(_) => {
-                        ping_sender
-                            .send((server.to_string(), PingInfo::Unreachable))
-                            .unwrap();
-                    }
+                    thread::sleep(std::time::Duration::from_millis(500));
                 }
             });
         });
