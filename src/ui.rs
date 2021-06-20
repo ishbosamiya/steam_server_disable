@@ -294,7 +294,7 @@ impl Application for UI {
                     * 100.0;
             }
             row = row.push(
-                Text::new(format!("{} loss", loss_info))
+                Text::new(format!("{:.2} loss", loss_info))
                     .size(20)
                     .width(Length::Units(180)),
             );
