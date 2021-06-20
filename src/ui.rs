@@ -3,7 +3,6 @@ use iced::{
     button, executor, scrollable, Application, Button, Clipboard, Command, Element, Length, Row,
     Scrollable, Subscription, Text,
 };
-use rayon::prelude::*;
 
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
@@ -99,27 +98,26 @@ impl Application for UI {
 
         let (ping_sender, ping_receiver) = bounded(server_list.len());
         let server_obj = ui.server_obj.clone();
-        thread::spawn(|| {
-            let ping_sender = ping_sender;
-            let server_list = server_list;
-            let server_obj = server_obj;
-            let server_obj = server_obj.read().unwrap();
-            loop {
-                server_list.par_iter().for_each(|server| {
-                    match server_obj.get_server_ping(&server) {
-                        Ok(rtt) => {
-                            ping_sender
-                                .send((server.to_string(), PingInfo::Rtt(rtt)))
-                                .unwrap();
-                        }
-                        Err(_) => {
-                            ping_sender
-                                .send((server.to_string(), PingInfo::Unreachable))
-                                .unwrap();
-                        }
+
+        server_list.iter().for_each(|server| {
+            let server = server.clone();
+            let ping_sender = ping_sender.clone();
+            let server_obj = server_obj.clone();
+            thread::spawn(move || loop {
+                let server_obj = server_obj.read().unwrap();
+                match server_obj.get_server_ping(&server) {
+                    Ok(rtt) => {
+                        ping_sender
+                            .send((server.to_string(), PingInfo::Rtt(rtt)))
+                            .unwrap();
                     }
-                });
-            }
+                    Err(_) => {
+                        ping_sender
+                            .send((server.to_string(), PingInfo::Unreachable))
+                            .unwrap();
+                    }
+                }
+            });
         });
 
         ui.ping_receiver = Some(ping_receiver);
