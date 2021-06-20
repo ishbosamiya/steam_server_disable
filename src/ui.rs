@@ -5,6 +5,7 @@ use iced::{
 };
 use rayon::prelude::*;
 
+use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -29,7 +30,7 @@ struct Server {
     enable_button: button::State,
     disable_button: button::State,
     state: ServerState,
-    ping: PingInfo,
+    ping: VecDeque<PingInfo>,
 }
 
 impl Server {
@@ -44,7 +45,7 @@ impl Server {
             enable_button,
             disable_button,
             state,
-            ping: PingInfo::Unknown,
+            ping: VecDeque::with_capacity(4),
         };
     }
 }
@@ -189,7 +190,10 @@ impl Application for UI {
                         .iter_mut()
                         .filter(|button| button.abr == server)
                         .for_each(|button| {
-                            button.ping = info;
+                            if button.ping.len() > 15 {
+                                button.ping.pop_front();
+                            }
+                            button.ping.push_back(info);
                         });
                 }
             }
@@ -240,8 +244,59 @@ impl Application for UI {
                     .size(20)
                     .width(Length::Units(150)),
             );
+            let ping_info;
+            if server.ping.len() <= 4 {
+                ping_info = PingInfo::Unknown;
+            } else {
+                let rtt = server
+                    .ping
+                    .range(server.ping.len() - 3..)
+                    .filter(|info| {
+                        if let PingInfo::Rtt(_) = info {
+                            return true;
+                        } else {
+                            return false;
+                        }
+                    })
+                    .fold(
+                        (0, std::time::Duration::from_millis(0)),
+                        |(num_valid, elapsed), info| match info {
+                            PingInfo::Rtt(rtt) => (num_valid + 1, elapsed + *rtt),
+                            _ => panic!("filter didn't filter out non Rtt of PingInfo"),
+                        },
+                    );
+                if rtt.0 == 0 {
+                    ping_info = PingInfo::Unreachable;
+                } else {
+                    ping_info = PingInfo::Rtt(rtt.1 / rtt.0);
+                }
+            }
             row = row.push(
-                Text::new(format!("{}", server.ping))
+                Text::new(format!("{}", ping_info))
+                    .size(20)
+                    .width(Length::Units(180)),
+            );
+            let loss_info;
+            if server.ping.len() == 0 {
+                loss_info = 100.0;
+            } else {
+                loss_info = (server.ping.len()
+                    - server
+                        .ping
+                        .iter()
+                        .filter(|info| {
+                            if let PingInfo::Rtt(_) = info {
+                                return true;
+                            } else {
+                                return false;
+                            }
+                        })
+                        .count()) as f64
+                    / server.ping.len() as f64
+                    * 100.0;
+            }
+            row = row.push(
+                Text::new(format!("{} loss", loss_info))
                     .size(20)
                     .width(Length::Units(180)),
             );

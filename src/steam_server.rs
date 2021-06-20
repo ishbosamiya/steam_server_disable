@@ -209,7 +209,7 @@ impl From<iptables::error::IptablesError> for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PingInfo {
     Unknown,
     Unreachable,
