@@ -42,13 +42,13 @@ impl Server {
         disable_button: button::State,
         state: ServerState,
     ) -> Self {
-        return Self {
+        Self {
             abr,
             enable_button,
             disable_button,
             state,
             ping: VecDeque::with_capacity(4),
-        };
+        }
     }
 }
 
@@ -80,12 +80,7 @@ impl Application for UI {
         let server_list = server_obj.get_server_list();
         let server_list: Vec<String> = server_list
             .iter()
-            .filter(|server| {
-                if let Ok(_) = server_obj.get_server_ips(server) {
-                    return true;
-                }
-                return false;
-            })
+            .filter(|server| server_obj.get_server_ips(server).is_ok())
             .map(|server| server.to_string())
             .collect();
         server_list.iter().for_each(|server| {
@@ -142,11 +137,11 @@ impl Application for UI {
 
         ui.ping_receiver = Some(ping_receiver);
 
-        return (ui, Command::none());
+        (ui, Command::none())
     }
 
     fn title(&self) -> String {
-        return String::from("Steam Server Toggle");
+        String::from("Steam Server Toggle")
     }
 
     fn update(
@@ -160,24 +155,14 @@ impl Application for UI {
                 server_obj.unban_server(&self.ipt.0, &server_abr).unwrap();
                 self.buttons
                     .iter_mut()
-                    .filter(|server| {
-                        if server.abr == server_abr {
-                            return true;
-                        }
-                        return false;
-                    })
+                    .filter(|server| server.abr == server_abr)
                     .for_each(|server| server.state = ServerState::NoneDisabled);
             }
             Message::DisableServer(server_abr) => {
                 server_obj.ban_server(&self.ipt.0, &server_abr).unwrap();
                 self.buttons
                     .iter_mut()
-                    .filter(|server| {
-                        if server.abr == server_abr {
-                            return true;
-                        }
-                        return false;
-                    })
+                    .filter(|server| server.abr == server_abr)
                     .for_each(|server| server.state = ServerState::AllDisabled);
             }
             Message::EnableAll => {
@@ -217,7 +202,7 @@ impl Application for UI {
             }
         }
 
-        return Command::none();
+        Command::none()
     }
 
     fn view(&mut self) -> Element<Message> {
@@ -269,13 +254,7 @@ impl Application for UI {
                 let rtt = server
                     .ping
                     .range(server.ping.len() - 3..)
-                    .filter(|info| {
-                        if let PingInfo::Rtt(_) = info {
-                            return true;
-                        } else {
-                            return false;
-                        }
-                    })
+                    .filter(|info| matches!(info, PingInfo::Rtt(_)))
                     .fold(
                         (0, std::time::Duration::from_millis(0)),
                         |(num_valid, elapsed), info| match info {
@@ -295,20 +274,14 @@ impl Application for UI {
                     .width(Length::Units(180)),
             );
             let loss_info;
-            if server.ping.len() == 0 {
+            if server.ping.is_empty() {
                 loss_info = 100.0;
             } else {
                 loss_info = (server.ping.len()
                     - server
                         .ping
                         .iter()
-                        .filter(|info| {
-                            if let PingInfo::Rtt(_) = info {
-                                return true;
-                            } else {
-                                return false;
-                            }
-                        })
+                        .filter(|info| matches!(info, PingInfo::Rtt(_)))
                         .count()) as f64
                     / server.ping.len() as f64
                     * 100.0;

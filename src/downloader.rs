@@ -11,13 +11,13 @@ pub enum Error {
 
 impl From<curl::Error> for Error {
     fn from(error: curl::Error) -> Self {
-        return Error::Curl(error);
+        Error::Curl(error)
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
-        return Error::IO(error);
+        Error::IO(error)
     }
 }
 
@@ -49,6 +49,6 @@ impl Download {
             transfer.perform()?;
         }
         std::fs::write(file_path, buf)?;
-        return Ok(());
+        Ok(())
     }
 }

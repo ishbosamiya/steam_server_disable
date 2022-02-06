@@ -54,7 +54,7 @@ impl std::fmt::Display for ServerState {
 
 impl Default for ServerObject {
     fn default() -> Self {
-        return Self::new();
+        Self::new()
     }
 }
 
@@ -102,20 +102,20 @@ impl ServerObject {
             },
         )?;
 
-        return Ok(total_elapsed / ips.len().try_into().unwrap());
+        Ok(total_elapsed / ips.len().try_into().unwrap())
     }
 
     pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&String>, Error> {
         let server = self.pops.get(server_abr).ok_or(Error::NoServer)?;
         let relays = server.relays.as_ref().ok_or(Error::NoRelay)?;
         let ips = relays.iter().map(|relay| &relay.ipv4).collect();
-        return Ok(ips);
+        Ok(ips)
     }
 
     pub fn get_server_list(&self) -> Vec<&String> {
         let mut list: Vec<&String> = self.pops.keys().collect();
         list.sort();
-        return list;
+        list
     }
 
     pub fn get_server_state(
@@ -144,21 +144,21 @@ impl ServerObject {
         if one_exists {
             return Ok(ServerState::SomeDisabled);
         }
-        return Ok(ServerState::NoneDisabled);
+        Ok(ServerState::NoneDisabled)
     }
 
     fn ban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
         let rule = format!("-s {} -j DROP", ip);
         ipt.append_replace("filter", "INPUT", &rule)
-            .or_else(|_| return Err(Error::UnsuccessfulBan))?;
-        return Ok(());
+            .map_err(|_| Error::UnsuccessfulBan)?;
+        Ok(())
     }
 
     fn unban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
         let rule = format!("-s {} -j DROP", ip);
         ipt.delete_all("filter", "INPUT", &rule)
-            .or_else(|_| return Err(Error::UnsuccessfulUnban))?;
-        return Ok(());
+            .map_err(|_| Error::UnsuccessfulUnban)?;
+        Ok(())
     }
 
     pub fn ban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), Error> {
@@ -166,7 +166,7 @@ impl ServerObject {
         for ip in ip_list {
             self.ban_ip(ipt, ip)?;
         }
-        return Ok(());
+        Ok(())
     }
 
     pub fn unban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), Error> {
@@ -174,7 +174,7 @@ impl ServerObject {
         for ip in ip_list {
             self.unban_ip(ipt, ip)?;
         }
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -197,13 +197,13 @@ impl std::fmt::Display for Error {
 
 impl From<downloader::Error> for Error {
     fn from(error: downloader::Error) -> Self {
-        return Error::Downloader(error);
+        Error::Downloader(error)
     }
 }
 
 impl From<iptables::error::IptablesError> for Error {
     fn from(error: iptables::error::IptablesError) -> Self {
-        return Error::IPTables(error);
+        Error::IPTables(error)
     }
 }
 
