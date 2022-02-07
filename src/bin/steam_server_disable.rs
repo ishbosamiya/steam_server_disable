@@ -51,10 +51,10 @@ fn main() {
 
     let mut egui = EguiBackend::new(&mut window, &mut glfw);
 
-    let app = UI::new();
+    let mut app = UI::new();
 
     unsafe {
-        gl::ClearColor(0.1, 0.3, 0.2, 1.0);
+        gl::ClearColor(0.2, 0.2, 0.2, 1.0);
     }
 
     while !window.should_close() {

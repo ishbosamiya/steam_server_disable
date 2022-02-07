@@ -19,19 +19,34 @@ pub struct ServerObject {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ServerInfo {
+pub(crate) struct ServerInfo {
     desc: Option<String>,
     geo: Option<Vec<f32>>,
     groups: Vec<String>,
     relays: Option<Vec<RelayInfo>>,
 }
 
+impl ServerInfo {
+    /// Get a reference to the server info's relays.
+    pub(crate) fn get_relays(&self) -> Option<&Vec<RelayInfo>> {
+        self.relays.as_ref()
+    }
+}
+
 #[derive(Serialize, Deserialize)]
-struct RelayInfo {
+pub(crate) struct RelayInfo {
     ipv4: String,
     port_range: Vec<usize>,
 }
 
+impl RelayInfo {
+    /// Get a reference to the relay info's ipv4.
+    pub(crate) fn get_ipv4(&self) -> &str {
+        self.ipv4.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum ServerState {
     AllDisabled,
     SomeDisabled,
@@ -147,24 +162,10 @@ impl ServerObject {
         Ok(ServerState::NoneDisabled)
     }
 
-    fn ban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
-        let rule = format!("-s {} -j DROP", ip);
-        ipt.append_replace("filter", "INPUT", &rule)
-            .map_err(|_| Error::UnsuccessfulBan)?;
-        Ok(())
-    }
-
-    fn unban_ip(&self, ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
-        let rule = format!("-s {} -j DROP", ip);
-        ipt.delete_all("filter", "INPUT", &rule)
-            .map_err(|_| Error::UnsuccessfulUnban)?;
-        Ok(())
-    }
-
     pub fn ban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), Error> {
         let ip_list = self.get_server_ips(server_abr)?;
         for ip in ip_list {
-            self.ban_ip(ipt, ip)?;
+            ban_ip(ipt, ip)?;
         }
         Ok(())
     }
@@ -172,9 +173,14 @@ impl ServerObject {
     pub fn unban_server(&self, ipt: &iptables::IPTables, server_abr: &str) -> Result<(), Error> {
         let ip_list = self.get_server_ips(server_abr)?;
         for ip in ip_list {
-            self.unban_ip(ipt, ip)?;
+            unban_ip(ipt, ip)?;
         }
         Ok(())
+    }
+
+    /// Get a reference to the server object's pops.
+    pub(crate) fn get_pops(&self) -> &HashMap<String, ServerInfo> {
+        &self.pops
     }
 }
 
@@ -232,4 +238,18 @@ impl std::fmt::Display for PingInfo {
             )
         }
     }
+}
+
+pub fn ban_ip(ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
+    let rule = format!("-s {} -j DROP", ip);
+    ipt.append_replace("filter", "INPUT", &rule)
+        .map_err(|_| Error::UnsuccessfulBan)?;
+    Ok(())
+}
+
+pub fn unban_ip(ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
+    let rule = format!("-s {} -j DROP", ip);
+    ipt.delete_all("filter", "INPUT", &rule)
+        .map_err(|_| Error::UnsuccessfulUnban)?;
+    Ok(())
 }
