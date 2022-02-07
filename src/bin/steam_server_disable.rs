@@ -1,4 +1,7 @@
-use egui_glfw::{egui, EguiBackend};
+use egui_glfw::{
+    egui::{self, FontDefinitions, FontFamily, TextStyle},
+    EguiBackend,
+};
 use glfw::{self, Context};
 
 use nalgebra_glm as glm;
@@ -50,6 +53,19 @@ fn main() {
     }
 
     let mut egui = EguiBackend::new(&mut window, &mut glfw);
+
+    let mut fonts = FontDefinitions::default();
+    // larger text
+    fonts
+        .family_and_size
+        .insert(TextStyle::Button, (FontFamily::Proportional, 18.0));
+    fonts
+        .family_and_size
+        .insert(TextStyle::Body, (FontFamily::Proportional, 18.0));
+    fonts
+        .family_and_size
+        .insert(TextStyle::Small, (FontFamily::Proportional, 15.0));
+    egui.get_egui_ctx().set_fonts(fonts);
 
     let mut app = UI::new();
 
