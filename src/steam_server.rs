@@ -1,8 +1,6 @@
-use fastping_rs::{PingResult, Pinger};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -100,24 +98,6 @@ impl ServerObject {
         let file_path = "network_datagram_config.json";
         downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path)?;
         Ok(())
-    }
-
-    fn _get_server_ping(&self, server_abr: &str) -> Result<std::time::Duration, Error> {
-        let (pinger, results) = Pinger::new(None, None).expect("couldn't create pinger");
-
-        let ips = self.get_server_ips(server_abr)?;
-        ips.iter().for_each(|ip| pinger.add_ipaddr(ip));
-        pinger.run_pinger();
-
-        let total_elapsed = results.iter().take(ips.len()).try_fold(
-            std::time::Duration::from_millis(0),
-            |elapsed, result| match result {
-                PingResult::Idle { addr: _ } => Err(Error::ServerUnreachable),
-                PingResult::Receive { addr: _, rtt } => Ok(elapsed + rtt),
-            },
-        )?;
-
-        Ok(total_elapsed / ips.len().try_into().unwrap())
     }
 
     pub fn get_server_ips(&self, server_abr: &str) -> Result<Vec<&String>, Error> {
