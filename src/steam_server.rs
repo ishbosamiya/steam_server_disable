@@ -195,31 +195,6 @@ impl From<iptables::error::IptablesError> for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum PingInfo {
-    Unknown,
-    Unreachable,
-    Rtt(std::time::Duration),
-}
-
-impl std::fmt::Display for PingInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let PingInfo::Rtt(duration) = self {
-            write!(f, "{} ms", duration.as_millis())
-        } else {
-            write!(
-                f,
-                "{}",
-                match self {
-                    PingInfo::Unknown => "Unknown Ping",
-                    PingInfo::Unreachable => "Server Unreachable",
-                    _ => "",
-                }
-            )
-        }
-    }
-}
-
 pub fn ban_ip(ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
     let rule = format!("-s {} -j DROP", ip);
     ipt.append_replace("filter", "INPUT", &rule)
