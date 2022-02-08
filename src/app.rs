@@ -23,7 +23,6 @@ pub enum PingerMessage {
 
 pub struct App {
     servers: Servers,
-    ipt: iptables::IPTables,
 
     ping_info: HashMap<Ipv4Addr, VecDeque<Result<PingInfo, ping::Error>>>,
 
@@ -110,7 +109,6 @@ impl App {
 
         let res = Self {
             servers: Servers::new(),
-            ipt: iptables::new(false).unwrap(),
             ping_info: HashMap::new(),
             pinger_message_sender,
             ping_receiver,
@@ -127,7 +125,7 @@ impl App {
     /// can lead to duplications otherwise
     fn send_currently_active_ip_list_to_pinger(&self) {
         self.servers.get_servers().iter().for_each(|info| {
-            match info.get_cached_server_state(&self.ipt) {
+            match info.get_cached_server_state() {
                 ServerState::SomeDisabled | ServerState::NoneDisabled => {
                     self.pinger_message_sender
                         .send(PingerMessage::AppendToList(
@@ -221,7 +219,7 @@ impl App {
                     columns[1].label("State");
                     if columns[2].button("Enable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
-                            server.unban(&self.ipt).unwrap();
+                            server.unban().unwrap();
                         });
                         self.pinger_message_sender
                             .send(PingerMessage::ClearList)
@@ -230,7 +228,7 @@ impl App {
                     }
                     if columns[3].button("Disable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
-                            server.ban(&self.ipt).unwrap();
+                            server.ban().unwrap();
                         });
                         self.ping_info.clear();
                         self.pinger_message_sender
@@ -248,10 +246,10 @@ impl App {
 
                         columns[0].label(server.get_abr());
 
-                        columns[1].label(server.get_cached_server_state(&self.ipt).to_string());
+                        columns[1].label(server.get_cached_server_state().to_string());
 
                         if columns[2].button("Enable").clicked() {
-                            server.unban(&self.ipt).unwrap();
+                            server.unban().unwrap();
 
                             // update pinger ip list
                             let ips: Vec<_> = server
@@ -270,7 +268,7 @@ impl App {
                         }
 
                         if columns[3].button("Disable").clicked() {
-                            server.ban(&self.ipt).unwrap();
+                            server.ban().unwrap();
 
                             let ips: Vec<_> = server
                                 .get_ipv4s()

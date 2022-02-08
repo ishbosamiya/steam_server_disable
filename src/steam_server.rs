@@ -1,8 +1,14 @@
+use lazy_static::lazy_static;
+
 use std::sync::Mutex;
 
 use crate::downloader;
 
 use self::parse::ServerObject;
+
+lazy_static! {
+    static ref IPTABLES: iptables::IPTables = iptables::new(false).unwrap();
+}
 
 mod parse {
     use serde::{Deserialize, Serialize};
@@ -147,16 +153,18 @@ impl From<iptables::error::IptablesError> for Error {
 
 impl std::error::Error for Error {}
 
-pub fn ban_ip(ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
+pub fn ban_ip(ip: &str) -> Result<(), Error> {
     let rule = format!("-s {} -j DROP", ip);
-    ipt.append_replace("filter", "INPUT", &rule)
+    IPTABLES
+        .append_replace("filter", "INPUT", &rule)
         .map_err(|_| Error::UnsuccessfulBan)?;
     Ok(())
 }
 
-pub fn unban_ip(ipt: &iptables::IPTables, ip: &str) -> Result<(), Error> {
+pub fn unban_ip(ip: &str) -> Result<(), Error> {
     let rule = format!("-s {} -j DROP", ip);
-    ipt.delete_all("filter", "INPUT", &rule)
+    IPTABLES
+        .delete_all("filter", "INPUT", &rule)
         .map_err(|_| Error::UnsuccessfulUnban)?;
     Ok(())
 }
@@ -172,7 +180,7 @@ pub struct ServerInfo {
 impl ServerInfo {
     /// Get cached state of the server, will cache the current state
     /// if state is not cached yet
-    pub fn get_cached_server_state(&self, ipt: &iptables::IPTables) -> ServerState {
+    pub fn get_cached_server_state(&self) -> ServerState {
         let mut state = self.state.lock().unwrap();
         if let Some(state) = &*state {
             *state
@@ -181,7 +189,7 @@ impl ServerInfo {
             let mut one_exists = false;
             self.get_ipv4s().iter().for_each(|ip| {
                 let rule = format!("-s {} -j DROP", ip);
-                if let Ok(exists) = ipt.exists("filter", "INPUT", &rule) {
+                if let Ok(exists) = IPTABLES.exists("filter", "INPUT", &rule) {
                     if exists {
                         one_exists = true;
                     } else {
@@ -204,14 +212,14 @@ impl ServerInfo {
         }
     }
 
-    pub fn ban(&self, ipt: &iptables::IPTables) -> Result<(), Error> {
+    pub fn ban(&self) -> Result<(), Error> {
         *self.state.lock().unwrap() = None;
-        self.get_ipv4s().iter().try_for_each(|ip| ban_ip(ipt, ip))
+        self.get_ipv4s().iter().try_for_each(|ip| ban_ip(ip))
     }
 
-    pub fn unban(&self, ipt: &iptables::IPTables) -> Result<(), Error> {
+    pub fn unban(&self) -> Result<(), Error> {
         *self.state.lock().unwrap() = None;
-        self.get_ipv4s().iter().try_for_each(|ip| unban_ip(ipt, ip))
+        self.get_ipv4s().iter().try_for_each(|ip| unban_ip(ip))
     }
 
     /// Get a reference to the server info's ipv4s.
