@@ -14,7 +14,7 @@ serde = { version = "1.0.125", features = ["derive"] }
 serde_json = "1.0.64"
 curl = "0.4.36"
 iptables = "0.4.3"
-egui_glfw = { git = "ssh://git@github.com/ishbosamiya/egui_glfw.git", tag = "v0.2.0" }
+egui_glfw = { git = "https://github.com/ishbosamiya/egui_glfw.git", tag = "v0.2.0" }
 glfw = "0.41"
 gl = "0.14"
 nalgebra-glm = "0.13"
@@ -22,4 +22,5 @@ icmp-socket = "0.1"
 sudo = "0.6"
 
 [patch.crates-io]
-icmp-socket = { git = "ssh://git@github.com/ishbosamiya/icmp-socket.git", branch = "correct_timeout_handling" }
+# current crates io version does not support timeout correctly
+icmp-socket = { git = "https://github.com/zaphar/icmp-socket.git", branch = "master" }
