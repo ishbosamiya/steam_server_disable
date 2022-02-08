@@ -23,6 +23,9 @@ icmp-socket = "0.1"
 iptables = "0.4.3"
 sudo = "0.6"
 
+[target.'cfg(windows)'.dependencies]
+is_elevated = "0.1"
+
 [patch.crates-io]
 # current crates io version does not support timeout correctly
 icmp-socket = { git = "https://github.com/zaphar/icmp-socket.git", branch = "master" }

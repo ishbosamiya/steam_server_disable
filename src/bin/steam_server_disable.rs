@@ -12,6 +12,12 @@ fn main() {
     {
         sudo::escalate_if_needed().unwrap();
     }
+    #[cfg(windows)]
+    {
+        if !is_elevated::is_elevated() {
+            panic!("Must run as administrator");
+        }
+    }
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
