@@ -157,13 +157,18 @@ impl App {
             pinger.set_timeout(Duration::from_millis(500));
             let mut index = 0;
             loop {
-                if let Ok(message) = pinger_message_receiver.try_recv() {
-                    match message {
-                        PingerMessage::PushToList(ip) => list.push(ip),
-                        PingerMessage::ClearList => list.clear(),
-                        PingerMessage::KillThread => break,
-                    }
+                let messages: Vec<_> = pinger_message_receiver.try_iter().collect();
+                if messages
+                    .iter()
+                    .any(|message| matches!(message, PingerMessage::KillThread))
+                {
+                    break;
                 }
+                messages.iter().for_each(|message| match message {
+                    PingerMessage::PushToList(ip) => list.push(*ip),
+                    PingerMessage::ClearList => list.clear(),
+                    PingerMessage::KillThread => unreachable!(),
+                });
 
                 if !list.is_empty() {
                     if index > list.len() {
