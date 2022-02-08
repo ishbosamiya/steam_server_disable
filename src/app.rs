@@ -5,11 +5,6 @@ use crate::{
     steam_server::{self, Error, ServerObject, ServerState},
 };
 
-pub struct UI {
-    servers: Servers,
-    ipt: iptables::IPTables,
-}
-
 pub struct Servers {
     servers: Vec<ServerInfo>,
 }
@@ -114,7 +109,12 @@ impl From<ServerObject> for Servers {
     }
 }
 
-impl UI {
+pub struct App {
+    servers: Servers,
+    ipt: iptables::IPTables,
+}
+
+impl App {
     pub fn new() -> Self {
         Self {
             servers: ServerObject::new().into(),
@@ -172,7 +172,7 @@ impl UI {
     }
 }
 
-impl Default for UI {
+impl Default for App {
     fn default() -> Self {
         Self::new()
     }

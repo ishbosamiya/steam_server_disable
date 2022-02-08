@@ -5,7 +5,7 @@ use egui_glfw::{
 use glfw::{self, Context};
 
 use nalgebra_glm as glm;
-use steam_server_disable::ui::UI;
+use steam_server_disable::app::App;
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -67,7 +67,7 @@ fn main() {
         .insert(TextStyle::Small, (FontFamily::Proportional, 15.0));
     egui.get_egui_ctx().set_fonts(fonts);
 
-    let mut app = UI::new();
+    let mut app = App::new();
 
     unsafe {
         gl::ClearColor(0.2, 0.2, 0.2, 1.0);
