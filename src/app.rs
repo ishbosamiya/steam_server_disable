@@ -119,6 +119,8 @@ impl From<ServerObject> for Servers {
 
 pub enum PingerMessage {
     PushToList(Ipv4Addr),
+    RemoveFromList(Ipv4Addr),
+    AppendToList(Vec<Ipv4Addr>),
     ClearList,
     KillThread,
 }
@@ -164,22 +166,32 @@ impl App {
                 {
                     break;
                 }
-                messages.iter().for_each(|message| match message {
-                    PingerMessage::PushToList(ip) => list.push(*ip),
+
+                messages.into_iter().for_each(|message| match message {
+                    PingerMessage::PushToList(ip) => list.push(ip),
+                    PingerMessage::RemoveFromList(remove_ip) => {
+                        if let Some(index) = list.iter().enumerate().find_map(|(index, ip)| {
+                            if *ip == remove_ip {
+                                Some(index)
+                            } else {
+                                None
+                            }
+                        }) {
+                            list.swap_remove(index);
+                        }
+                    }
+                    PingerMessage::AppendToList(ip_list) => list.extend(ip_list.into_iter()),
                     PingerMessage::ClearList => list.clear(),
                     PingerMessage::KillThread => unreachable!(),
                 });
 
                 if !list.is_empty() {
-                    if index > list.len() {
-                        index = list.len() - 1;
+                    if index >= list.len() {
+                        index = 0;
                     }
                     let ping_data = pinger.ping(list[index], 0);
                     ping_sender.send((list[index], ping_data)).unwrap();
                     index += 1;
-                    if index > list.len() {
-                        index = 0;
-                    }
                 } else {
                     thread::sleep(Duration::from_millis(50));
                 }
@@ -196,11 +208,20 @@ impl App {
         };
 
         res.servers.get_servers().iter().for_each(|info| {
-            info.get_ipv4s().iter().for_each(|ip| {
-                res.pinger_message_sender
-                    .send(PingerMessage::PushToList(ip.parse::<Ipv4Addr>().unwrap()))
-                    .unwrap();
-            })
+            match info.get_cached_server_state(&res.ipt) {
+                ServerState::SomeDisabled | ServerState::NoneDisabled => {
+                    res.pinger_message_sender
+                        .send(PingerMessage::AppendToList(
+                            info.get_ipv4s()
+                                .iter()
+                                .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
+                                .collect(),
+                        ))
+                        .unwrap();
+                }
+                _ => { // do nothing }
+                }
+            }
         });
 
         res
@@ -248,6 +269,28 @@ impl App {
         if ui.button("Download Server List").clicked() {
             ServerObject::download_file().unwrap();
             self.servers = ServerObject::new().into();
+        }
+
+        // debug ping info
+        if false {
+            egui::Grid::new("debug_ping_info_grid")
+                .striped(true)
+                .min_col_width(ui.available_width() / 2.0)
+                .max_col_width(ui.available_width())
+                .show(ui, |ui| {
+                    self.ping_info.iter().for_each(|(ip, ping_list)| {
+                        ui.columns(2, |columns| {
+                            columns[0].label(ip.to_string());
+                            ping_list.iter().for_each(|info| {
+                                columns[1].label(match info {
+                                    Ok(ping) => ping.to_string(),
+                                    Err(_) => "Error".to_string(),
+                                });
+                            });
+                        });
+                        ui.end_row();
+                    });
+                });
         }
 
         let num_columns = 6;
