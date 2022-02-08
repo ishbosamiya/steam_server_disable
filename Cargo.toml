@@ -18,6 +18,8 @@ glfw = "0.41"
 gl = "0.14"
 nalgebra-glm = "0.13"
 icmp-socket = "0.1"
+log = "0.4"
+lazy_static = "1.4"
 
 [target.'cfg(unix)'.dependencies]
 iptables = "0.4.3"

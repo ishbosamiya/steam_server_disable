@@ -192,6 +192,7 @@ impl ServerInfo {
 
     pub fn ban(&self, firewall: &Firewall) -> Result<(), Error> {
         *self.state.lock().unwrap() = None;
+        log::info!("banned {}", self.get_abr());
         Ok(self
             .get_ipv4s()
             .iter()
@@ -200,6 +201,7 @@ impl ServerInfo {
 
     pub fn unban(&self, firewall: &Firewall) -> Result<(), Error> {
         *self.state.lock().unwrap() = None;
+        log::info!("unbanned {}", self.get_abr());
         Ok(self
             .get_ipv4s()
             .iter()

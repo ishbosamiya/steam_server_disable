@@ -5,7 +5,7 @@ use egui_glfw::{
 use glfw::{self, Context};
 
 use nalgebra_glm as glm;
-use steam_server_disable::app::App;
+use steam_server_disable::{app::App, logger};
 
 fn main() {
     #[cfg(unix)]
@@ -18,6 +18,8 @@ fn main() {
             panic!("Must run as administrator");
         }
     }
+
+    logger::init().unwrap();
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -106,6 +108,8 @@ fn main() {
                     app.draw_ui(ui);
                 });
         });
+
+        logger::get_logger().draw_ui(egui.get_egui_ctx());
 
         let (width, height) = window.get_framebuffer_size();
         let _output = egui.end_frame(glm::vec2(width as _, height as _));
