@@ -8,7 +8,10 @@ use nalgebra_glm as glm;
 use steam_server_disable::app::App;
 
 fn main() {
-    sudo::escalate_if_needed().unwrap();
+    #[cfg(unix)]
+    {
+        sudo::escalate_if_needed().unwrap();
+    }
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
