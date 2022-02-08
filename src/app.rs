@@ -168,7 +168,13 @@ impl App {
                 }
 
                 messages.into_iter().for_each(|message| match message {
-                    PingerMessage::PushToList(ip) => list.push(ip),
+                    PingerMessage::PushToList(add_ip) => {
+                        debug_assert!(
+                            !list.iter().any(|ip| *ip == add_ip),
+                            "attempting to add duplicate ip to the pinger list"
+                        );
+                        list.push(add_ip);
+                    }
                     PingerMessage::RemoveFromList(remove_ip) => {
                         if let Some(index) = list.iter().enumerate().find_map(|(index, ip)| {
                             if *ip == remove_ip {
@@ -180,7 +186,15 @@ impl App {
                             list.swap_remove(index);
                         }
                     }
-                    PingerMessage::AppendToList(ip_list) => list.extend(ip_list.into_iter()),
+                    PingerMessage::AppendToList(ip_list) => {
+                        debug_assert!(
+                            !list
+                                .iter()
+                                .any(|ip| ip_list.iter().any(|add_ip| { add_ip == ip })),
+                            "attempting to add duplicate ip to the pinger list"
+                        );
+                        list.extend(ip_list.into_iter());
+                    }
                     PingerMessage::ClearList => list.clear(),
                     PingerMessage::KillThread => unreachable!(),
                 });
@@ -207,10 +221,19 @@ impl App {
             pinger_thread_handle: Some(pinger_thread_handle),
         };
 
-        res.servers.get_servers().iter().for_each(|info| {
-            match info.get_cached_server_state(&res.ipt) {
+        res.send_currently_active_ip_list_to_pinger();
+
+        res
+    }
+
+    /// note: it is generally a good idea to clear the list before
+    /// sending the complete server ip list to the pinger thread, it
+    /// can lead to duplications otherwise
+    fn send_currently_active_ip_list_to_pinger(&self) {
+        self.servers.get_servers().iter().for_each(|info| {
+            match info.get_cached_server_state(&self.ipt) {
                 ServerState::SomeDisabled | ServerState::NoneDisabled => {
-                    res.pinger_message_sender
+                    self.pinger_message_sender
                         .send(PingerMessage::AppendToList(
                             info.get_ipv4s()
                                 .iter()
@@ -223,8 +246,6 @@ impl App {
                 }
             }
         });
-
-        res
     }
 
     /// Update all information that must happen very so often. eg:
@@ -307,29 +328,69 @@ impl App {
                         self.servers.get_servers().iter().for_each(|server| {
                             server.unban(&self.ipt).unwrap();
                         });
+                        self.pinger_message_sender
+                            .send(PingerMessage::ClearList)
+                            .unwrap();
+                        self.send_currently_active_ip_list_to_pinger();
                     }
                     if columns[3].button("Disable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
                             server.ban(&self.ipt).unwrap();
                         });
+                        self.ping_info.clear();
+                        self.pinger_message_sender
+                            .send(PingerMessage::ClearList)
+                            .unwrap();
                     }
                     columns[4].label("Ping");
                     columns[5].label("Loss");
                 });
                 ui.end_row();
 
-                self.servers.get_servers().iter().for_each(|server| {
-                    ui.columns(num_columns, |columns| {
+                for server in self.servers.get_servers() {
+                    let ping_info_remove_ips = ui.columns(num_columns, |columns| {
+                        let mut ping_info_remove_ips = None;
+
                         columns[0].label(server.get_abr());
 
                         columns[1].label(server.get_cached_server_state(&self.ipt).to_string());
 
                         if columns[2].button("Enable").clicked() {
                             server.unban(&self.ipt).unwrap();
+
+                            // update pinger ip list
+                            let ips: Vec<_> = server
+                                .get_ipv4s()
+                                .iter()
+                                .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
+                                .collect();
+                            ips.iter().for_each(|ip| {
+                                self.pinger_message_sender
+                                    .send(PingerMessage::RemoveFromList(*ip))
+                                    .unwrap();
+                            });
+                            self.pinger_message_sender
+                                .send(PingerMessage::AppendToList(ips))
+                                .unwrap();
                         }
 
                         if columns[3].button("Disable").clicked() {
                             server.ban(&self.ipt).unwrap();
+
+                            let ips: Vec<_> = server
+                                .get_ipv4s()
+                                .iter()
+                                .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
+                                .collect();
+
+                            // update pinger ip list
+                            ips.iter().for_each(|ip| {
+                                self.pinger_message_sender
+                                    .send(PingerMessage::RemoveFromList(*ip))
+                                    .unwrap();
+                            });
+
+                            ping_info_remove_ips = Some(ips);
                         }
 
                         let (total_ping, total_num_packets, lost_packets) = server
@@ -364,10 +425,18 @@ impl App {
                                 lost_packets as f64 / total_num_packets as f64 * 100.0
                             ));
                         }
+
+                        ping_info_remove_ips
                     });
 
+                    if let Some(ip_list) = ping_info_remove_ips {
+                        for ip in ip_list.iter() {
+                            self.ping_info.remove(ip);
+                        }
+                    }
+
                     ui.end_row();
-                });
+                }
             });
     }
 }
