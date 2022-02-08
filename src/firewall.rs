@@ -158,18 +158,19 @@ mod windows {
 
     impl FirewallRequirements for Firewall {
         fn is_blocked(&self, ip: std::net::Ipv4Addr) -> Result<bool, Error> {
-            Ok(Command::new("netsh")
+            let output = Command::new("netsh")
                 .arg("advfirewall")
                 .arg("firewall")
                 .arg("show")
                 .arg("rule")
                 .arg(format!("name=\"IP_BLOCK_{}\"", ip))
                 .output()
-                .is_ok())
+                .unwrap();
+            Ok(output.status.success())
         }
 
         fn ban_ip(&self, ip: std::net::Ipv4Addr) -> Result<(), Error> {
-            Command::new("netsh")
+            let output = Command::new("netsh")
                 .arg("advfirewall")
                 .arg("firewall")
                 .arg("add")
@@ -180,20 +181,28 @@ mod windows {
                 .arg("action=block")
                 .arg(format!("remoteip={}/32", ip))
                 .output()
-                .map_err(|_| Error::UnsuccessfulBan(ip))?;
-            Ok(())
+                .unwrap();
+            if !output.status.success() {
+                Err(Error::UnsuccessfulBan(ip))
+            } else {
+                Ok(())
+            }
         }
 
         fn unban_ip(&self, ip: std::net::Ipv4Addr) -> Result<(), Error> {
-            Command::new("netsh")
+            let output = Command::new("netsh")
                 .arg("advfirewall")
                 .arg("firewall")
                 .arg("delete")
                 .arg("rule")
                 .arg(format!("name=\"IP_BLOCK_{}\"", ip))
                 .output()
-                .map_err(|_| Error::UnsuccessfulBan(ip))?;
-            Ok(())
+                .unwrap();
+            if !output.status.success() {
+                Err(Error::UnsuccessfulUnban(ip))
+            } else {
+                Ok(())
+            }
         }
     }
 }
