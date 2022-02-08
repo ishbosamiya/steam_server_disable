@@ -1,14 +1,11 @@
-use lazy_static::lazy_static;
+use std::{net::Ipv4Addr, sync::Mutex};
 
-use std::sync::Mutex;
-
-use crate::downloader;
+use crate::{
+    downloader,
+    firewall::{self, Firewall},
+};
 
 use self::parse::ServerObject;
-
-lazy_static! {
-    static ref IPTABLES: iptables::IPTables = iptables::new(false).unwrap();
-}
 
 mod parse {
     use serde::{Deserialize, Serialize};
@@ -125,11 +122,9 @@ impl std::fmt::Display for ServerState {
 #[derive(Debug)]
 pub enum Error {
     Downloader(downloader::Error),
-    IPTables(iptables::error::IptablesError),
     NoServer,
     NoRelay,
-    UnsuccessfulBan,
-    UnsuccessfulUnban,
+    Firewall(firewall::Error),
     ServerUnreachable,
 }
 
@@ -145,33 +140,17 @@ impl From<downloader::Error> for Error {
     }
 }
 
-impl From<iptables::error::IptablesError> for Error {
-    fn from(error: iptables::error::IptablesError) -> Self {
-        Error::IPTables(error)
+impl From<firewall::Error> for Error {
+    fn from(error: firewall::Error) -> Self {
+        Error::Firewall(error)
     }
 }
 
 impl std::error::Error for Error {}
 
-pub fn ban_ip(ip: &str) -> Result<(), Error> {
-    let rule = format!("-s {} -j DROP", ip);
-    IPTABLES
-        .append_replace("filter", "INPUT", &rule)
-        .map_err(|_| Error::UnsuccessfulBan)?;
-    Ok(())
-}
-
-pub fn unban_ip(ip: &str) -> Result<(), Error> {
-    let rule = format!("-s {} -j DROP", ip);
-    IPTABLES
-        .delete_all("filter", "INPUT", &rule)
-        .map_err(|_| Error::UnsuccessfulUnban)?;
-    Ok(())
-}
-
 pub struct ServerInfo {
     abr: String,
-    ipv4s: Vec<String>,
+    ipv4s: Vec<Ipv4Addr>,
 
     /// Cached state of the server
     state: Mutex<Option<ServerState>>,
@@ -180,7 +159,7 @@ pub struct ServerInfo {
 impl ServerInfo {
     /// Get cached state of the server, will cache the current state
     /// if state is not cached yet
-    pub fn get_cached_server_state(&self) -> ServerState {
+    pub fn get_cached_server_state(&self, firewall: &Firewall) -> ServerState {
         let mut state = self.state.lock().unwrap();
         if let Some(state) = &*state {
             *state
@@ -188,8 +167,7 @@ impl ServerInfo {
             let mut all_dropped = true;
             let mut one_exists = false;
             self.get_ipv4s().iter().for_each(|ip| {
-                let rule = format!("-s {} -j DROP", ip);
-                if let Ok(exists) = IPTABLES.exists("filter", "INPUT", &rule) {
+                if let Ok(exists) = firewall.is_blocked(*ip) {
                     if exists {
                         one_exists = true;
                     } else {
@@ -212,18 +190,24 @@ impl ServerInfo {
         }
     }
 
-    pub fn ban(&self) -> Result<(), Error> {
+    pub fn ban(&self, firewall: &Firewall) -> Result<(), Error> {
         *self.state.lock().unwrap() = None;
-        self.get_ipv4s().iter().try_for_each(|ip| ban_ip(ip))
+        Ok(self
+            .get_ipv4s()
+            .iter()
+            .try_for_each(|ip| firewall.ban_ip(*ip))?)
     }
 
-    pub fn unban(&self) -> Result<(), Error> {
+    pub fn unban(&self, firewall: &Firewall) -> Result<(), Error> {
         *self.state.lock().unwrap() = None;
-        self.get_ipv4s().iter().try_for_each(|ip| unban_ip(ip))
+        Ok(self
+            .get_ipv4s()
+            .iter()
+            .try_for_each(|ip| firewall.unban_ip(*ip))?)
     }
 
     /// Get a reference to the server info's ipv4s.
-    pub fn get_ipv4s(&self) -> &[String] {
+    pub fn get_ipv4s(&self) -> &[Ipv4Addr] {
         self.ipv4s.as_ref()
     }
 
@@ -267,7 +251,7 @@ impl From<ServerObject> for Servers {
                 let ipv4s = info
                     .get_relays()?
                     .iter()
-                    .map(|info| info.get_ipv4().to_string())
+                    .map(|info| info.get_ipv4().parse().unwrap())
                     .collect();
                 Some(ServerInfo {
                     abr: server.to_string(),

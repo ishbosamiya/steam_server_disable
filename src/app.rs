@@ -9,6 +9,7 @@ use std::{
 
 use crate::{
     egui,
+    firewall::Firewall,
     ping::{self, PingInfo, Pinger},
     steam_server::{ServerState, Servers},
 };
@@ -23,6 +24,7 @@ pub enum PingerMessage {
 
 pub struct App {
     servers: Servers,
+    firewall: Firewall,
 
     ping_info: HashMap<Ipv4Addr, VecDeque<Result<PingInfo, ping::Error>>>,
 
@@ -109,6 +111,7 @@ impl App {
 
         let res = Self {
             servers: Servers::new(),
+            firewall: Firewall::new(),
             ping_info: HashMap::new(),
             pinger_message_sender,
             ping_receiver,
@@ -125,15 +128,10 @@ impl App {
     /// can lead to duplications otherwise
     fn send_currently_active_ip_list_to_pinger(&self) {
         self.servers.get_servers().iter().for_each(|info| {
-            match info.get_cached_server_state() {
+            match info.get_cached_server_state(&self.firewall) {
                 ServerState::SomeDisabled | ServerState::NoneDisabled => {
                     self.pinger_message_sender
-                        .send(PingerMessage::AppendToList(
-                            info.get_ipv4s()
-                                .iter()
-                                .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
-                                .collect(),
-                        ))
+                        .send(PingerMessage::AppendToList(info.get_ipv4s().to_vec()))
                         .unwrap();
                 }
                 _ => { // do nothing }
@@ -219,7 +217,7 @@ impl App {
                     columns[1].label("State");
                     if columns[2].button("Enable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
-                            server.unban().unwrap();
+                            server.unban(&self.firewall).unwrap();
                         });
                         self.pinger_message_sender
                             .send(PingerMessage::ClearList)
@@ -228,7 +226,7 @@ impl App {
                     }
                     if columns[3].button("Disable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
-                            server.ban().unwrap();
+                            server.ban(&self.firewall).unwrap();
                         });
                         self.ping_info.clear();
                         self.pinger_message_sender
@@ -246,17 +244,14 @@ impl App {
 
                         columns[0].label(server.get_abr());
 
-                        columns[1].label(server.get_cached_server_state().to_string());
+                        columns[1]
+                            .label(server.get_cached_server_state(&self.firewall).to_string());
 
                         if columns[2].button("Enable").clicked() {
-                            server.unban().unwrap();
+                            server.unban(&self.firewall).unwrap();
 
                             // update pinger ip list
-                            let ips: Vec<_> = server
-                                .get_ipv4s()
-                                .iter()
-                                .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
-                                .collect();
+                            let ips = server.get_ipv4s().to_vec();
                             ips.iter().for_each(|ip| {
                                 self.pinger_message_sender
                                     .send(PingerMessage::RemoveFromList(*ip))
@@ -268,13 +263,9 @@ impl App {
                         }
 
                         if columns[3].button("Disable").clicked() {
-                            server.ban().unwrap();
+                            server.ban(&self.firewall).unwrap();
 
-                            let ips: Vec<_> = server
-                                .get_ipv4s()
-                                .iter()
-                                .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
-                                .collect();
+                            let ips = server.get_ipv4s().to_vec();
 
                             // update pinger ip list
                             ips.iter().for_each(|ip| {
@@ -289,10 +280,9 @@ impl App {
                         let (total_ping, total_num_packets, lost_packets) = server
                             .get_ipv4s()
                             .iter()
-                            .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
                             .fold((Duration::ZERO, 0, 0), |acc, ip| {
                                 let (ping, total_num_packets, lost_packets) =
-                                    self.calculate_total_ping_for_ip(ip);
+                                    self.calculate_total_ping_for_ip(*ip);
                                 (
                                     acc.0 + ping,
                                     acc.1 + total_num_packets,

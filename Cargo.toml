@@ -20,7 +20,6 @@ gl = "0.14"
 nalgebra-glm = "0.13"
 icmp-socket = "0.1"
 sudo = "0.6"
-lazy_static = "1.4"
 
 [patch.crates-io]
 icmp-socket = { git = "ssh://git@github.com/ishbosamiya/icmp-socket.git", branch = "correct_timeout_handling" }
