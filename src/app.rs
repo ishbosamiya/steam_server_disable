@@ -415,7 +415,7 @@ impl App {
                         };
 
                         if total_num_packets == lost_packets {
-                            columns[4].label("Total Loss");
+                            columns[4].label("NA");
                             columns[5].label("100.00%");
                         } else {
                             columns[4].label(format!("{}", PingInfo::new(ping)));
