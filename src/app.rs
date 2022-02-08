@@ -251,13 +251,15 @@ impl App {
     /// Update all information that must happen very so often. eg:
     /// ping information receiving
     pub fn update(&mut self) {
+        let max_pings_per_ip = 20;
+
         let ping_info = &mut self.ping_info;
         self.ping_receiver.try_iter().for_each(|(ip, info)| {
             let ip_info = ping_info.entry(ip).or_insert_with(VecDeque::new);
             ip_info.push_front(info);
 
-            if ip_info.len() > 10 {
-                ip_info.truncate(10);
+            if ip_info.len() > max_pings_per_ip {
+                ip_info.truncate(max_pings_per_ip);
             }
         });
     }
