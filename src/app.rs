@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     convert::TryInto,
     net::Ipv4Addr,
-    sync::{mpsc, Mutex},
+    sync::mpsc,
     thread,
     time::Duration,
 };
@@ -10,112 +10,8 @@ use std::{
 use crate::{
     egui,
     ping::{self, PingInfo, Pinger},
-    steam_server::{self, Error, ServerObject, ServerState},
+    steam_server::{ServerState, Servers},
 };
-
-pub struct Servers {
-    servers: Vec<ServerInfo>,
-}
-
-impl Servers {
-    /// Get a reference to the servers's servers.
-    pub fn get_servers(&self) -> &[ServerInfo] {
-        self.servers.as_ref()
-    }
-}
-
-pub struct ServerInfo {
-    abr: String,
-    ipv4s: Vec<String>,
-
-    /// Cached state of the server
-    state: Mutex<Option<ServerState>>,
-}
-
-impl ServerInfo {
-    /// Get cached state of the server, will cache the current state
-    /// if state is not cached yet
-    pub fn get_cached_server_state(&self, ipt: &iptables::IPTables) -> ServerState {
-        let mut state = self.state.lock().unwrap();
-        if let Some(state) = &*state {
-            *state
-        } else {
-            let mut all_dropped = true;
-            let mut one_exists = false;
-            self.get_ipv4s().iter().for_each(|ip| {
-                let rule = format!("-s {} -j DROP", ip);
-                if let Ok(exists) = ipt.exists("filter", "INPUT", &rule) {
-                    if exists {
-                        one_exists = true;
-                    } else {
-                        all_dropped = false;
-                    }
-                } else {
-                    all_dropped = false;
-                }
-            });
-            let server_state = if all_dropped {
-                ServerState::AllDisabled
-            } else if one_exists {
-                ServerState::SomeDisabled
-            } else {
-                ServerState::NoneDisabled
-            };
-
-            *state = Some(server_state);
-            server_state
-        }
-    }
-
-    pub fn ban(&self, ipt: &iptables::IPTables) -> Result<(), Error> {
-        *self.state.lock().unwrap() = None;
-        self.get_ipv4s()
-            .iter()
-            .try_for_each(|ip| steam_server::ban_ip(ipt, ip))
-    }
-
-    pub fn unban(&self, ipt: &iptables::IPTables) -> Result<(), Error> {
-        *self.state.lock().unwrap() = None;
-        self.get_ipv4s()
-            .iter()
-            .try_for_each(|ip| steam_server::unban_ip(ipt, ip))
-    }
-
-    /// Get a reference to the server info's ipv4s.
-    pub fn get_ipv4s(&self) -> &[String] {
-        self.ipv4s.as_ref()
-    }
-
-    /// Get a reference to the server info's abr.
-    pub fn get_abr(&self) -> &str {
-        self.abr.as_ref()
-    }
-}
-
-impl From<ServerObject> for Servers {
-    fn from(server_object: ServerObject) -> Self {
-        let mut servers: Vec<_> = server_object
-            .get_pops()
-            .iter()
-            .filter_map(|(server, info)| {
-                let ipv4s = info
-                    .get_relays()?
-                    .iter()
-                    .map(|info| info.get_ipv4().to_string())
-                    .collect();
-                Some(ServerInfo {
-                    abr: server.to_string(),
-                    ipv4s,
-                    state: Mutex::new(None),
-                })
-            })
-            .collect();
-
-        servers.sort_unstable_by_key(|info| info.abr.to_string());
-
-        Servers { servers }
-    }
-}
 
 pub enum PingerMessage {
     PushToList(Ipv4Addr),
@@ -213,7 +109,7 @@ impl App {
         });
 
         let res = Self {
-            servers: ServerObject::new().into(),
+            servers: Servers::new(),
             ipt: iptables::new(false).unwrap(),
             ping_info: HashMap::new(),
             pinger_message_sender,
@@ -287,8 +183,8 @@ impl App {
 
     pub fn draw_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Download Server List").clicked() {
-            ServerObject::download_file().unwrap();
-            self.servers = ServerObject::new().into();
+            Servers::download_file().unwrap();
+            self.servers = Servers::new();
         }
 
         // debug ping info
