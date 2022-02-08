@@ -84,6 +84,8 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
+        app.update();
+
         egui.begin_frame(&window, &mut glfw);
 
         egui::CentralPanel::default().show(egui.get_egui_ctx(), |ui| {

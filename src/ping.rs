@@ -32,27 +32,45 @@ impl From<std::io::Error> for Error {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum PingInfo {
-    Rtt(std::time::Duration),
+pub struct PingInfo {
+    rtt: Duration,
+}
+
+impl PingInfo {
+    pub fn new(rtt: Duration) -> Self {
+        Self { rtt }
+    }
+
+    /// Get ping info's rtt.
+    pub fn get_rtt(&self) -> Duration {
+        self.rtt
+    }
 }
 
 impl std::fmt::Display for PingInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PingInfo::Rtt(duration) => write!(f, "{} ms", duration.as_millis()),
-        }
+        write!(f, "{:.2} ms", self.rtt.as_secs_f64() * 1000.0)
     }
 }
 
 pub struct Pinger {
     socket: IcmpSocket4,
+
+    timeout: Duration,
 }
 
 impl Pinger {
     pub fn new() -> Self {
         let mut socket = IcmpSocket4::new().unwrap();
         socket.bind("0.0.0.0".parse::<Ipv4Addr>().unwrap()).unwrap();
-        Self { socket }
+        Self {
+            socket,
+            timeout: Duration::from_secs(2),
+        }
+    }
+
+    pub fn set_timeout(&mut self, timeout: Duration) {
+        self.timeout = timeout;
     }
 
     pub fn ping(&mut self, ipv4: impl Into<Ipv4Addr>, sequence: u16) -> Result<PingInfo, Error> {
@@ -71,7 +89,8 @@ impl Pinger {
 
         let send_time = Instant::now();
         self.socket.send_to(ipv4, packet).unwrap();
-        self.socket.set_timeout(Duration::from_secs(2)).unwrap();
+
+        self.socket.set_timeout(Some(self.timeout));
 
         self.socket
             .rcv_from()
@@ -86,7 +105,7 @@ impl Pinger {
             })
             .and_then(|packet| {
                 if let Icmpv4Message::EchoReply { .. } = packet.message {
-                    Ok(PingInfo::Rtt(send_time.elapsed()))
+                    Ok(PingInfo::new(send_time.elapsed()))
                 } else {
                     Err(Error::Unreachable)
                 }

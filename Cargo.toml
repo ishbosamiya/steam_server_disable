@@ -19,3 +19,6 @@ glfw = "0.41"
 gl = "0.14"
 nalgebra-glm = "0.13"
 icmp-socket = "0.1"
+
+[patch.crates-io]
+icmp-socket = { git = "ssh://git@github.com/ishbosamiya/icmp-socket.git", branch = "correct_timeout_handling" }
