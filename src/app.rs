@@ -262,9 +262,12 @@ impl App {
         });
     }
 
-    /// Calculate the ping for the given ip. Returns the rtt, total
+    /// Calculate the total ping for the given ip. Returns the rtt, total
     /// number of packets number of packets dropped.
-    fn calculate_ping_for_ip(&self, ip: Ipv4Addr) -> (Duration, usize, usize) {
+    ///
+    /// note: this returns the total ping not the average ping of the
+    /// packets
+    fn calculate_total_ping_for_ip(&self, ip: Ipv4Addr) -> (Duration, usize, usize) {
         self.ping_info
             .get(&ip)
             .map(|list| {
@@ -275,12 +278,6 @@ impl App {
                             Err(_) => (acc.0, acc.1 + 1),
                         });
 
-                let num_valid_packets = (list.len() - num_lost_packets).try_into().unwrap();
-                let total_ping = if num_valid_packets == 0 {
-                    total_ping
-                } else {
-                    total_ping / num_valid_packets
-                };
                 (total_ping, list.len(), num_lost_packets)
             })
             .unwrap_or((Duration::ZERO, 0, 0))
@@ -399,7 +396,7 @@ impl App {
                             .map(|ip| ip.parse::<Ipv4Addr>().unwrap())
                             .fold((Duration::ZERO, 0, 0), |acc, ip| {
                                 let (ping, total_num_packets, lost_packets) =
-                                    self.calculate_ping_for_ip(ip);
+                                    self.calculate_total_ping_for_ip(ip);
                                 (
                                     acc.0 + ping,
                                     acc.1 + total_num_packets,
