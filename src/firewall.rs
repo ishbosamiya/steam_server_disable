@@ -46,6 +46,8 @@ trait FirewallRequirements: Default {
 pub struct Firewall {
     #[cfg(unix)]
     unix_firewall: unix::Firewall,
+    #[cfg(windows)]
+    windows_firewall: windows::Firewall,
 }
 
 impl Default for Firewall {
@@ -59,22 +61,42 @@ impl Firewall {
         Self {
             #[cfg(unix)]
             unix_firewall: unix::Firewall::new(),
+            #[cfg(windows)]
+            windows_firewall: windows::Firewall::new(),
         }
     }
 
     pub fn is_blocked(&self, ip: Ipv4Addr) -> Result<bool, Error> {
         #[cfg(unix)]
-        self.unix_firewall.is_blocked(ip)
+        {
+            self.unix_firewall.is_blocked(ip)
+        }
+        #[cfg(windows)]
+        {
+            self.windows_firewall.is_blocked(ip)
+        }
     }
 
     pub fn ban_ip(&self, ip: Ipv4Addr) -> Result<(), Error> {
         #[cfg(unix)]
-        self.unix_firewall.ban_ip(ip)
+        {
+            self.unix_firewall.ban_ip(ip)
+        }
+        #[cfg(windows)]
+        {
+            self.windows_firewall.ban_ip(ip)
+        }
     }
 
     pub fn unban_ip(&self, ip: Ipv4Addr) -> Result<(), Error> {
         #[cfg(unix)]
-        self.unix_firewall.unban_ip(ip)
+        {
+            self.unix_firewall.unban_ip(ip)
+        }
+        #[cfg(windows)]
+        {
+            self.windows_firewall.unban_ip(ip)
+        }
     }
 }
 
@@ -120,6 +142,62 @@ mod unix {
             self.ipt
                 .delete_all("filter", "INPUT", &rule)
                 .map_err(|_| Error::UnsuccessfulUnban(ip))
+        }
+    }
+}
+
+#[cfg(windows)]
+mod windows {
+    use std::process::Command;
+
+    use super::{Error, FirewallRequirements};
+
+    pub struct Firewall {}
+
+    impl Default for Firewall {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl FirewallRequirements for Firewall {
+        fn is_blocked(&self, ip: std::net::Ipv4Addr) -> Result<bool, Error> {
+            Ok(Command::new("netsh")
+                .arg("advfirewall")
+                .arg("firewall")
+                .arg("show")
+                .arg("rule")
+                .arg(format!("name=\"IP_BLOCK_{}\"", ip))
+                .output()
+                .is_ok())
+        }
+
+        fn ban_ip(&self, ip: std::net::Ipv4Addr) -> Result<(), Error> {
+            Command::new("netsh")
+                .arg("advfirewall")
+                .arg("firewall")
+                .arg("add")
+                .arg("rule")
+                .arg(format!("name=\"IP_BLOCK_{}\"", ip))
+                .arg("dir=out")
+                .arg("interface=any")
+                .arg("action=block")
+                .arg(format!("remoteip={}/32", ip))
+                .output()
+                .map_err(|_| Error::UnsuccessfulBan(ip))?;
+            Ok(())
+        }
+
+        fn unban_ip(&self, ip: std::net::Ipv4Addr) -> Result<(), Error> {
+            Command::new("netsh")
+                .arg("advfirewall")
+                .arg("firewall")
+                .arg("delete")
+                .arg("rule")
+                .arg(format!("name=\"IP_BLOCK_{}\"", ip))
+                .output()
+                .map_err(|_| Error::UnsuccessfulBan(ip))?;
+            Ok(())
         }
     }
 }
