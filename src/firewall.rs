@@ -28,10 +28,6 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 trait FirewallRequirements: Default {
-    fn new() -> Self {
-        Self::default()
-    }
-
     /// Checks if ip exists in the firewall and thus is blocked
     fn is_blocked(&self, ip: Ipv4Addr) -> Result<bool, Error>;
 
@@ -60,9 +56,9 @@ impl Firewall {
     pub fn new() -> Self {
         Self {
             #[cfg(unix)]
-            unix_firewall: unix::Firewall::new(),
+            unix_firewall: unix::Firewall::default(),
             #[cfg(windows)]
-            windows_firewall: windows::Firewall::new(),
+            windows_firewall: windows::Firewall::default(),
         }
     }
 
@@ -156,7 +152,7 @@ mod windows {
 
     impl Default for Firewall {
         fn default() -> Self {
-            Self::new()
+            Self {}
         }
     }
 
