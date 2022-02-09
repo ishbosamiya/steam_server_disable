@@ -11,7 +11,7 @@ lazy_static! {
 }
 
 pub struct EguiLogger {
-    records: Mutex<VecDeque<String>>,
+    records: Mutex<VecDeque<Record>>,
 }
 
 pub fn init() -> Result<(), SetLoggerError> {
@@ -29,9 +29,14 @@ impl EguiLogger {
             .show(ctx, |ui| {
                 let records = self.records.lock().unwrap();
 
-                records.iter().for_each(|record| {
-                    ui.label(record);
-                });
+                egui::Grid::new("logging window grid")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        records.iter().for_each(|record| {
+                            record.draw_ui(ui);
+                            ui.end_row();
+                        });
+                    });
             });
     }
 }
@@ -46,15 +51,7 @@ impl Log for EguiLogger {
 
         if self.enabled(record.metadata()) {
             let mut records = self.records.lock().unwrap();
-            records.push_front(format!(
-                "{} - {}:{} - {}",
-                record.level(),
-                record.file().map_or("None", |file| file),
-                record
-                    .line()
-                    .map_or("None".to_string(), |line| line.to_string()),
-                record.args()
-            ));
+            records.push_front(Record::new(record));
 
             if records.len() > max_number_of_records {
                 records.truncate(max_number_of_records);
@@ -63,4 +60,47 @@ impl Log for EguiLogger {
     }
 
     fn flush(&self) {}
+}
+
+struct Record {
+    level: log::Level,
+    file: Option<String>,
+    line: Option<u32>,
+    args: String,
+}
+
+impl Record {
+    pub fn new(record: &log::Record) -> Self {
+        Self {
+            level: record.level(),
+            file: record.file().map(|string| string.to_string()),
+            line: record.line(),
+            args: record.args().to_string(),
+        }
+    }
+
+    pub fn draw_ui(&self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let color = match self.level {
+                Level::Error => Some(egui::Color32::RED),
+                Level::Warn => Some(egui::Color32::YELLOW),
+                Level::Info => Some(egui::Color32::LIGHT_BLUE),
+                Level::Debug => Some(egui::Color32::from_rgb(78, 39, 138)),
+                Level::Trace => None,
+            };
+            if let Some(color) = color {
+                ui.colored_label(color, self.level.as_str());
+            } else {
+                ui.label(self.level.as_str());
+            }
+
+            if let Some(file) = &self.file {
+                if let Some(line) = &self.line {
+                    ui.label(format!("{}:{}", file, line));
+                }
+            }
+
+            ui.label(&self.args);
+        });
+    }
 }
