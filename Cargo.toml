@@ -2,7 +2,7 @@
 name = "steam_server_disable"
 version = "0.1.0"
 authors = ["ishbosamiya <ishbosamiya@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "steam_server_disable"
