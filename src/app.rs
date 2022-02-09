@@ -226,7 +226,7 @@ impl App {
                         self.servers.get_servers().iter().for_each(|server| {
                             let unban_res = server.unban(&self.firewall);
                             if let Err(err) = unban_res {
-                                log::error!("{}", err);
+                                log::error!("{}: {}", server.get_abr(), err);
                             }
                         });
                         self.pinger_message_sender
@@ -238,7 +238,7 @@ impl App {
                         self.servers.get_servers().iter().for_each(|server| {
                             let ban_res = server.ban(&self.firewall);
                             if let Err(err) = ban_res {
-                                log::error!("{}", err);
+                                log::error!("{}: {}", server.get_abr(), err);
                             }
                         });
                         self.ping_info.clear();
@@ -263,7 +263,7 @@ impl App {
                         if columns[2].button("Enable").clicked() {
                             let unban_res = server.unban(&self.firewall);
                             if let Err(err) = unban_res {
-                                log::error!("{}", err);
+                                log::error!("{}: {}", server.get_abr(), err);
                             }
 
                             // update pinger ip list
@@ -281,7 +281,7 @@ impl App {
                         if columns[3].button("Disable").clicked() {
                             let ban_res = server.ban(&self.firewall);
                             if let Err(err) = ban_res {
-                                log::error!("{}", err);
+                                log::error!("{}: {}", server.get_abr(), err);
                             }
 
                             let ips = server.get_ipv4s().to_vec();
