@@ -1,4 +1,10 @@
-use std::{collections::VecDeque, sync::Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+};
 
 use egui_glfw::egui;
 use lazy_static::lazy_static;
@@ -8,12 +14,14 @@ lazy_static! {
     static ref LOGGER: EguiLogger = EguiLogger {
         records: Mutex::new(VecDeque::new()),
         previous_ui_sizes: Mutex::new(None),
+        force_open_logging_window: AtomicBool::new(false),
     };
 }
 
 pub struct EguiLogger {
     records: Mutex<VecDeque<Record>>,
     previous_ui_sizes: Mutex<Option<UiSizes>>,
+    force_open_logging_window: AtomicBool,
 }
 
 pub fn init() -> Result<(), SetLoggerError> {
@@ -25,9 +33,14 @@ pub fn get_logger() -> &'static EguiLogger {
 }
 
 impl EguiLogger {
-    pub fn draw_ui(&self, ctx: &egui::CtxRef) {
+    pub fn draw_ui(&self, ctx: &egui::CtxRef, open_logging_window: &mut bool) {
+        if self.force_open_logging_window.swap(false, Ordering::SeqCst) {
+            *open_logging_window = true;
+        }
+
         egui::Window::new("Logging Window")
             .scroll2([true, true])
+            .open(open_logging_window)
             .show(ctx, |ui| {
                 let records = self.records.lock().unwrap();
 
@@ -55,6 +68,10 @@ impl Log for EguiLogger {
 
     fn log(&self, record: &log::Record) {
         let max_number_of_records = 10000;
+
+        if record.level() == Level::Error {
+            self.force_open_logging_window.swap(true, Ordering::SeqCst);
+        }
 
         if self.enabled(record.metadata()) {
             let mut records = self.records.lock().unwrap();
