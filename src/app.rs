@@ -179,7 +179,10 @@ impl App {
 
     pub fn draw_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Download Server List").clicked() {
-            Servers::download_file().unwrap();
+            let download_file_res = Servers::download_file();
+            if let Err(err) = download_file_res {
+                log::error!("{}", err);
+            }
             self.servers = Servers::new();
         }
 
