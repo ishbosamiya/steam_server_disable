@@ -14,7 +14,7 @@ mod parse {
     use std::fs::File;
     use std::io::prelude::*;
 
-    use crate::downloader;
+    use crate::{downloader, file_ops};
 
     use super::Error;
 
@@ -64,7 +64,7 @@ mod parse {
 
     impl ServerObject {
         pub fn new() -> Self {
-            let file_path = "network_datagram_config.json";
+            let file_path = file_ops::get_network_datagram_config_file_path();
             let mut file = File::open(file_path)
                 .or_else(|_| {
                     match Self::download_file() {
@@ -72,7 +72,7 @@ mod parse {
                         Err(error) => {
                             panic!(
                         "{} didn't exist, tried to download, check your internet connection? {}",
-                        file_path, error
+                        file_path.to_str().unwrap(), error
                     )
                         }
                     }
@@ -86,7 +86,7 @@ mod parse {
         }
 
         pub fn download_file() -> Result<(), Error> {
-            let file_path = "network_datagram_config.json";
+            let file_path = file_ops::get_network_datagram_config_file_path();
             downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path)?;
             Ok(())
         }
