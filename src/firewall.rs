@@ -170,6 +170,10 @@ mod windows {
         }
 
         fn ban_ip(&self, ip: std::net::Ipv4Addr) -> Result<(), Error> {
+            if self.is_blocked(ip).unwrap() {
+                return Ok(());
+            }
+
             let output = Command::new("netsh")
                 .arg("advfirewall")
                 .arg("firewall")
@@ -190,6 +194,10 @@ mod windows {
         }
 
         fn unban_ip(&self, ip: std::net::Ipv4Addr) -> Result<(), Error> {
+            if !self.is_blocked(ip).unwrap() {
+                return Ok(());
+            }
+
             let output = Command::new("netsh")
                 .arg("advfirewall")
                 .arg("firewall")
