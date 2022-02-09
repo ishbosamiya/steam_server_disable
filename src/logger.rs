@@ -7,11 +7,13 @@ use log::{Level, LevelFilter, Log, SetLoggerError};
 lazy_static! {
     static ref LOGGER: EguiLogger = EguiLogger {
         records: Mutex::new(VecDeque::new()),
+        previous_ui_sizes: Mutex::new(None),
     };
 }
 
 pub struct EguiLogger {
     records: Mutex<VecDeque<Record>>,
+    previous_ui_sizes: Mutex<Option<UiSizes>>,
 }
 
 pub fn init() -> Result<(), SetLoggerError> {
@@ -32,10 +34,15 @@ impl EguiLogger {
                 egui::Grid::new("logging window grid")
                     .striped(true)
                     .show(ui, |ui| {
-                        records.iter().for_each(|record| {
-                            record.draw_ui(ui);
+                        let ui_sizes = records.iter().fold(UiSizes::zero(), |acc, record| {
+                            let ui_sizes =
+                                record.draw_ui(ui, self.previous_ui_sizes.lock().unwrap().as_ref());
                             ui.end_row();
+
+                            acc.max(&ui_sizes)
                         });
+
+                        *self.previous_ui_sizes.lock().unwrap() = Some(ui_sizes);
                     });
             });
     }
@@ -79,7 +86,7 @@ impl Record {
         }
     }
 
-    pub fn draw_ui(&self, ui: &mut egui::Ui) {
+    pub fn draw_ui(&self, ui: &mut egui::Ui, previous_sizes: Option<&UiSizes>) -> UiSizes {
         ui.horizontal(|ui| {
             let color = match self.level {
                 Level::Error => Some(egui::Color32::RED),
@@ -88,19 +95,82 @@ impl Record {
                 Level::Debug => Some(egui::Color32::from_rgb(78, 39, 138)),
                 Level::Trace => None,
             };
-            if let Some(color) = color {
-                ui.colored_label(color, self.level.as_str());
-            } else {
-                ui.label(self.level.as_str());
-            }
 
-            if let Some(file) = &self.file {
-                if let Some(line) = &self.line {
-                    ui.label(format!("{}:{}", file, line));
-                }
-            }
+            let level_size = ui
+                .scope(|ui| {
+                    if let Some(previous_sizes) = previous_sizes {
+                        ui.set_min_size(previous_sizes.level);
+                    }
 
-            ui.label(&self.args);
-        });
+                    if let Some(color) = color {
+                        ui.colored_label(color, self.level.as_str());
+                    } else {
+                        ui.label(self.level.as_str());
+                    };
+                })
+                .response
+                .rect
+                .size();
+
+            let file_line_size = ui
+                .scope(|ui| {
+                    if let Some(previous_sizes) = previous_sizes {
+                        ui.set_min_size(previous_sizes.file_line);
+                    }
+
+                    if let Some(file) = &self.file {
+                        if let Some(line) = &self.line {
+                            ui.label(format!("{}:{}", file, line));
+                        }
+                    }
+                })
+                .response
+                .rect
+                .size();
+
+            let args_size = ui
+                .scope(|ui| {
+                    if let Some(previous_sizes) = previous_sizes {
+                        ui.set_min_size(previous_sizes.args);
+                    }
+
+                    ui.label(&self.args);
+                })
+                .response
+                .rect
+                .size();
+
+            UiSizes::new(level_size, file_line_size, args_size)
+        })
+        .inner
+    }
+}
+
+#[derive(Debug)]
+struct UiSizes {
+    level: egui::Vec2,
+    file_line: egui::Vec2,
+    args: egui::Vec2,
+}
+
+impl UiSizes {
+    pub fn new(level: egui::Vec2, file_line: egui::Vec2, args: egui::Vec2) -> Self {
+        Self {
+            level,
+            file_line,
+            args,
+        }
+    }
+
+    pub fn zero() -> Self {
+        Self::new(egui::Vec2::ZERO, egui::Vec2::ZERO, egui::Vec2::ZERO)
+    }
+
+    pub fn max(&self, other: &UiSizes) -> Self {
+        Self::new(
+            self.level.max(other.level),
+            self.file_line.max(other.file_line),
+            self.args.max(other.args),
+        )
     }
 }
