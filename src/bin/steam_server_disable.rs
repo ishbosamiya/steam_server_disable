@@ -17,7 +17,16 @@ fn main() {
     // TODO: need to find something to auto escalate to sudo on
     // windows
 
-    let is_running_as_sudo = matches!(sudo::check(), sudo::RunningAs::Root);
+    let is_running_as_sudo = {
+        #[cfg(unix)]
+        {
+            matches!(sudo::check(), sudo::RunningAs::Root)
+        }
+        #[cfg(windows)]
+        {
+            is_elevated::is_elevated()
+        }
+    };
 
     logger::init().unwrap();
 

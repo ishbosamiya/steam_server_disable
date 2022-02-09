@@ -20,10 +20,13 @@ nalgebra-glm = "0.13"
 icmp-socket = "0.1"
 log = "0.4"
 lazy_static = "1.4"
-sudo = "0.6"
 
 [target.'cfg(unix)'.dependencies]
 iptables = "0.4.3"
+sudo = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+is_elevated = "0.1"
 
 [patch.crates-io]
 # current crates io version does not support timeout correctly
