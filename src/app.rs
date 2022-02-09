@@ -217,7 +217,10 @@ impl App {
                     columns[1].label("State");
                     if columns[2].button("Enable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
-                            server.unban(&self.firewall).unwrap();
+                            let unban_res = server.unban(&self.firewall);
+                            if let Err(err) = unban_res {
+                                log::error!("{}", err);
+                            }
                         });
                         self.pinger_message_sender
                             .send(PingerMessage::ClearList)
@@ -226,7 +229,10 @@ impl App {
                     }
                     if columns[3].button("Disable All").clicked() {
                         self.servers.get_servers().iter().for_each(|server| {
-                            server.ban(&self.firewall).unwrap();
+                            let ban_res = server.ban(&self.firewall);
+                            if let Err(err) = ban_res {
+                                log::error!("{}", err);
+                            }
                         });
                         self.ping_info.clear();
                         self.pinger_message_sender
@@ -248,7 +254,10 @@ impl App {
                             .label(server.get_cached_server_state(&self.firewall).to_string());
 
                         if columns[2].button("Enable").clicked() {
-                            server.unban(&self.firewall).unwrap();
+                            let unban_res = server.unban(&self.firewall);
+                            if let Err(err) = unban_res {
+                                log::error!("{}", err);
+                            }
 
                             // update pinger ip list
                             let ips = server.get_ipv4s().to_vec();
@@ -263,7 +272,10 @@ impl App {
                         }
 
                         if columns[3].button("Disable").clicked() {
-                            server.ban(&self.firewall).unwrap();
+                            let ban_res = server.ban(&self.firewall);
+                            if let Err(err) = ban_res {
+                                log::error!("{}", err);
+                            }
 
                             let ips = server.get_ipv4s().to_vec();
 
