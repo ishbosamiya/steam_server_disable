@@ -144,9 +144,8 @@ impl App {
         });
     }
 
-    /// Update all information that must happen very so often. eg:
-    /// ping information receiving
-    pub fn update(&mut self) {
+    /// Update ping info by flushing the ping messages channel.
+    fn update_ping_info(&mut self) {
         let max_pings_per_ip = 20;
 
         let ping_info = &mut self.ping_info;
@@ -158,6 +157,12 @@ impl App {
                 ip_info.truncate(max_pings_per_ip);
             }
         });
+    }
+
+    /// Update all information that must happen very so often. eg:
+    /// ping information receiving
+    pub fn update(&mut self) {
+        self.update_ping_info();
     }
 
     /// Calculate the total ping for the given ip. Returns the rtt, total
@@ -241,13 +246,18 @@ impl App {
                                 log::error!("{}: {}", server.get_abr(), err);
                             }
                         });
-                        // TODO: need clear the list on the pinger
-                        // side and also flush the ping messages sent
-                        // here before clearing ping_info
-                        self.ping_info.clear();
+
                         self.pinger_message_sender
                             .send(PingerMessage::ClearList)
                             .unwrap();
+
+                        // hack: wait for the channel to get all the
+                        // messages before flushing them
+                        std::thread::sleep(Duration::from_secs(1));
+                        // flush the ping messages channel
+                        self.update_ping_info();
+
+                        self.ping_info.clear();
                     }
                     columns[4].label("Ping");
                     columns[5].label("Loss");
