@@ -101,6 +101,10 @@ impl App {
                         index = 0;
                     }
                     let ping_data = pinger.ping(list[index], 0);
+                    if let Err(ping::Error::SendError) = &ping_data {
+                        log::error!("Check your internet connection, unable to send packets");
+                        thread::sleep(Duration::from_secs(1));
+                    }
                     ping_sender.send((list[index], ping_data)).unwrap();
                     index += 1;
                 } else {

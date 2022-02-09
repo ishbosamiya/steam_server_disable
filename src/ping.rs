@@ -10,6 +10,7 @@ use icmp_socket::{packet::WithEchoRequest, IcmpSocket, IcmpSocket4, Icmpv4Messag
 pub enum Error {
     Unreachable,
     IoError(std::io::Error),
+    SendError,
     UnknownReturnAddress(Ipv4Addr),
 }
 
@@ -18,6 +19,7 @@ impl Display for Error {
         match self {
             Error::Unreachable => write!(f, "Unreachable"),
             Error::IoError(error) => write!(f, "{}", error),
+            Error::SendError => write!(f, "Send Error"),
             Error::UnknownReturnAddress(ipv4) => write!(f, "Unknown Return Address {}", ipv4),
         }
     }
@@ -88,7 +90,9 @@ impl Pinger {
         .unwrap();
 
         let send_time = Instant::now();
-        self.socket.send_to(ipv4, packet).unwrap();
+        self.socket
+            .send_to(ipv4, packet)
+            .map_err(|_| Error::SendError)?;
 
         self.socket.set_timeout(Some(self.timeout));
 
