@@ -147,7 +147,7 @@ impl App {
             let server_status_sender = server_status_sender;
             let firewall = thread_firewall;
 
-            let mut list = Vec::new();
+            let mut list = VecDeque::new();
             loop {
                 let messages: Vec<_> = server_status_message_receiver.try_iter().collect();
                 if messages
@@ -171,7 +171,7 @@ impl App {
                     ServerStatusMessage::KillThread => unreachable!(),
                 });
 
-                if let Some((server, ip_list)) = list.pop() {
+                if let Some((server, ip_list)) = list.pop_front() {
                     let mut all_dropped = true;
                     let mut one_exists = false;
                     ip_list.into_iter().for_each(|ip| {
