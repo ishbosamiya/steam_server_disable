@@ -1,4 +1,4 @@
-use std::{net::Ipv4Addr, sync::Mutex};
+use std::net::Ipv4Addr;
 
 use crate::{
     downloader,
@@ -103,6 +103,7 @@ pub enum ServerState {
     AllDisabled,
     SomeDisabled,
     NoneDisabled,
+    Unknown,
 }
 
 impl std::fmt::Display for ServerState {
@@ -114,6 +115,7 @@ impl std::fmt::Display for ServerState {
                 ServerState::AllDisabled => "All Disabled",
                 ServerState::SomeDisabled => "Some Disabled",
                 ServerState::NoneDisabled => "None Disabled",
+                ServerState::Unknown => "Unknown",
             }
         )
     }
@@ -151,47 +153,10 @@ impl std::error::Error for Error {}
 pub struct ServerInfo {
     abr: String,
     ipv4s: Vec<Ipv4Addr>,
-
-    /// Cached state of the server
-    state: Mutex<Option<ServerState>>,
 }
 
 impl ServerInfo {
-    /// Get cached state of the server, will cache the current state
-    /// if state is not cached yet
-    pub fn get_cached_server_state(&self, firewall: &Firewall) -> ServerState {
-        let mut state = self.state.lock().unwrap();
-        if let Some(state) = &*state {
-            *state
-        } else {
-            let mut all_dropped = true;
-            let mut one_exists = false;
-            self.get_ipv4s().iter().for_each(|ip| {
-                if let Ok(exists) = firewall.is_blocked(*ip) {
-                    if exists {
-                        one_exists = true;
-                    } else {
-                        all_dropped = false;
-                    }
-                } else {
-                    all_dropped = false;
-                }
-            });
-            let server_state = if all_dropped {
-                ServerState::AllDisabled
-            } else if one_exists {
-                ServerState::SomeDisabled
-            } else {
-                ServerState::NoneDisabled
-            };
-
-            *state = Some(server_state);
-            server_state
-        }
-    }
-
     pub fn ban(&self, firewall: &Firewall) -> Result<(), Error> {
-        *self.state.lock().unwrap() = None;
         log::info!("banned {}", self.get_abr());
         Ok(self
             .get_ipv4s()
@@ -200,7 +165,6 @@ impl ServerInfo {
     }
 
     pub fn unban(&self, firewall: &Firewall) -> Result<(), Error> {
-        *self.state.lock().unwrap() = None;
         log::info!("unbanned {}", self.get_abr());
         Ok(self
             .get_ipv4s()
@@ -258,7 +222,6 @@ impl From<ServerObject> for Servers {
                 Some(ServerInfo {
                     abr: server.to_string(),
                     ipv4s,
-                    state: Mutex::new(None),
                 })
             })
             .collect();
