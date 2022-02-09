@@ -1,3 +1,5 @@
+use std::sync::mpsc;
+
 use egui_glfw::{
     egui::{self, FontDefinitions, FontFamily, TextStyle},
     EguiBackend,
@@ -12,14 +14,16 @@ fn main() {
     {
         sudo::escalate_if_needed().unwrap();
     }
-    #[cfg(windows)]
-    {
-        if !is_elevated::is_elevated() {
-            panic!("Must run as administrator");
-        }
-    }
+    // TODO: need to find something to auto escalate to sudo on
+    // windows
+
+    let is_running_as_sudo = matches!(sudo::check(), sudo::RunningAs::Root);
 
     logger::init().unwrap();
+
+    if !is_running_as_sudo {
+        log::error!("Not running as sudo/administrator. Rerun application as sudo/admin.");
+    }
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -80,11 +84,17 @@ fn main() {
         .insert(TextStyle::Small, (FontFamily::Proportional, 15.0));
     egui.get_egui_ctx().set_fonts(fonts);
 
-    let mut app = App::new();
-
     unsafe {
         gl::ClearColor(0.2, 0.2, 0.2, 1.0);
     }
+
+    if !is_running_as_sudo {
+        non_sudo_gui(glfw, window, events, egui);
+
+        return;
+    }
+
+    let mut app = App::new();
 
     let mut open_logging_window = false;
 
@@ -130,5 +140,33 @@ fn handle_window_events(event: &glfw::WindowEvent, open_logging_window: &mut boo
             }
         }
         _ => {}
+    }
+}
+
+fn non_sudo_gui(
+    mut glfw: glfw::Glfw,
+    mut window: glfw::Window,
+    events: mpsc::Receiver<(f64, glfw::WindowEvent)>,
+    mut egui: egui_glfw::EguiBackend,
+) {
+    while !window.should_close() {
+        glfw.poll_events();
+
+        glfw::flush_messages(&events).for_each(|(_, event)| {
+            egui.handle_event(&event, &window);
+        });
+
+        unsafe {
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        }
+
+        egui.begin_frame(&window, &mut glfw);
+
+        logger::get_logger().draw_ui(egui.get_egui_ctx(), &mut true);
+
+        let (width, height) = window.get_framebuffer_size();
+        let _output = egui.end_frame(glm::vec2(width as _, height as _));
+
+        window.swap_buffers();
     }
 }
