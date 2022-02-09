@@ -241,6 +241,9 @@ impl App {
                                 log::error!("{}: {}", server.get_abr(), err);
                             }
                         });
+                        // TODO: need clear the list on the pinger
+                        // side and also flush the ping messages sent
+                        // here before clearing ping_info
                         self.ping_info.clear();
                         self.pinger_message_sender
                             .send(PingerMessage::ClearList)
@@ -257,8 +260,9 @@ impl App {
 
                         columns[0].label(server.get_abr());
 
-                        columns[1]
-                            .label(server.get_cached_server_state(&self.firewall).to_string());
+                        let server_status = server.get_cached_server_state(&self.firewall);
+
+                        columns[1].label(server_status.to_string());
 
                         if columns[2].button("Enable").clicked() {
                             let unban_res = server.unban(&self.firewall);
@@ -296,36 +300,41 @@ impl App {
                             ping_info_remove_ips = Some(ips);
                         }
 
-                        let (total_ping, total_num_packets, lost_packets) = server
-                            .get_ipv4s()
-                            .iter()
-                            .fold((Duration::ZERO, 0, 0), |acc, ip| {
-                                let (ping, total_num_packets, lost_packets) =
-                                    self.calculate_total_ping_for_ip(*ip);
-                                (
-                                    acc.0 + ping,
-                                    acc.1 + total_num_packets,
-                                    acc.2 + lost_packets,
-                                )
-                            });
-
-                        let num_valid_packets =
-                            (total_num_packets - lost_packets).try_into().unwrap();
-                        let ping = if num_valid_packets == 0 {
-                            total_ping
+                        if ServerState::AllDisabled == server_status {
+                            columns[4].label("Disabled");
+                            columns[5].label("Disabled");
                         } else {
-                            total_ping / num_valid_packets
-                        };
+                            let (total_ping, total_num_packets, lost_packets) = server
+                                .get_ipv4s()
+                                .iter()
+                                .fold((Duration::ZERO, 0, 0), |acc, ip| {
+                                    let (ping, total_num_packets, lost_packets) =
+                                        self.calculate_total_ping_for_ip(*ip);
+                                    (
+                                        acc.0 + ping,
+                                        acc.1 + total_num_packets,
+                                        acc.2 + lost_packets,
+                                    )
+                                });
 
-                        if total_num_packets == lost_packets {
-                            columns[4].label("NA");
-                            columns[5].label("100.00%");
-                        } else {
-                            columns[4].label(format!("{}", PingInfo::new(ping)));
-                            columns[5].label(format!(
-                                "{:.2}%",
-                                lost_packets as f64 / total_num_packets as f64 * 100.0
-                            ));
+                            let num_valid_packets =
+                                (total_num_packets - lost_packets).try_into().unwrap();
+                            let ping = if num_valid_packets == 0 {
+                                total_ping
+                            } else {
+                                total_ping / num_valid_packets
+                            };
+
+                            if total_num_packets == lost_packets {
+                                columns[4].label("NA");
+                                columns[5].label("100.00%");
+                            } else {
+                                columns[4].label(format!("{}", PingInfo::new(ping)));
+                                columns[5].label(format!(
+                                    "{:.2}%",
+                                    lost_packets as f64 / total_num_packets as f64 * 100.0
+                                ));
+                            }
                         }
 
                         ping_info_remove_ips
