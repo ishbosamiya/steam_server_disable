@@ -3,6 +3,11 @@ name = "steam_server_disable"
 version = "0.1.0"
 authors = ["ishbosamiya <ishbosamiya@gmail.com>"]
 edition = "2021"
+readme = "README.md"
+description = "A GUI tool to block access to Steam (CSGO/Dota) servers region-wise."
+homepage = "https://github.com/ishbosamiya/steam_server_disable"
+repository = "https://github.com/ishbosamiya/steam_server_disable"
+keywords = ["steam", "firewall", "gui"]
 
 [[bin]]
 name = "steam_server_disable"
