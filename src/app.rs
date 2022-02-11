@@ -440,7 +440,14 @@ impl App {
                     let ping_info_remove_ips = ui.columns(num_columns, |columns| {
                         let mut ping_info_remove_ips = None;
 
-                        columns[0].label(server.get_abr());
+                        let ip_list_shown = columns[0]
+                            .collapsing(server.get_abr(), |ui| {
+                                server.get_ipv4s().iter().for_each(|ip| {
+                                    ui.label(ip.to_string());
+                                });
+                            })
+                            .body_returned
+                            .is_some();
 
                         let server_status = *server_status_info
                             .get(server.get_abr())
@@ -506,36 +513,58 @@ impl App {
                             columns[4].label("Disabled");
                             columns[5].label("Disabled");
                         } else {
-                            let (total_ping, total_num_packets, lost_packets) = server
+                            let server_ping_info: Vec<_> = server
                                 .get_ipv4s()
                                 .iter()
-                                .fold((Duration::ZERO, 0, 0), |acc, ip| {
-                                    let (ping, total_num_packets, lost_packets) =
-                                        Self::calculate_total_ping_for_ip(ping_info, *ip);
-                                    (
-                                        acc.0 + ping,
-                                        acc.1 + total_num_packets,
-                                        acc.2 + lost_packets,
-                                    )
-                                });
+                                .map(|ip| Self::calculate_total_ping_for_ip(ping_info, *ip))
+                                .collect();
 
-                            let num_valid_packets =
-                                (total_num_packets - lost_packets).try_into().unwrap();
-                            let ping = if num_valid_packets == 0 {
-                                total_ping
-                            } else {
-                                total_ping / num_valid_packets
-                            };
+                            let (server_total_ping, server_num_packets, server_lost_packets) =
+                                server_ping_info.iter().fold(
+                                    (Duration::ZERO, 0, 0),
+                                    |acc, (ping, total_num_packets, lost_packets)| {
+                                        (
+                                            acc.0 + *ping,
+                                            acc.1 + total_num_packets,
+                                            acc.2 + lost_packets,
+                                        )
+                                    },
+                                );
 
-                            if total_num_packets == lost_packets {
-                                columns[4].label("NA");
-                                columns[5].label("100.00%");
-                            } else {
-                                columns[4].label(format!("{}", PingInfo::new(ping)));
-                                columns[5].label(format!(
-                                    "{:.2}%",
-                                    lost_packets as f64 / total_num_packets as f64 * 100.0
-                                ));
+                            let mut ui_ping_info =
+                                |total_ping: Duration, num_packets: usize, lost_packets: usize| {
+                                    let num_valid_packets =
+                                        (num_packets - lost_packets).try_into().unwrap();
+                                    let ping = if num_valid_packets == 0 {
+                                        total_ping
+                                    } else {
+                                        total_ping / num_valid_packets
+                                    };
+
+                                    if num_packets == lost_packets {
+                                        columns[4].label("NA");
+                                        columns[5].label("100.00%");
+                                    } else {
+                                        columns[4].label(format!("{}", PingInfo::new(ping)));
+                                        columns[5].label(format!(
+                                            "{:.2}%",
+                                            lost_packets as f64 / num_packets as f64 * 100.0
+                                        ));
+                                    }
+                                };
+
+                            ui_ping_info(
+                                server_total_ping,
+                                server_num_packets,
+                                server_lost_packets,
+                            );
+
+                            if ip_list_shown {
+                                server_ping_info.into_iter().for_each(
+                                    |(total_ping, num_packets, lost_packets)| {
+                                        ui_ping_info(total_ping, num_packets, lost_packets);
+                                    },
+                                );
                             }
                         }
 
