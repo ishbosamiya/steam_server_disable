@@ -276,10 +276,10 @@ impl App {
                             .send(PingerMessage::RemoveFromList(*ip))
                             .unwrap();
                     }),
-                    ServerState::NoneDisabled => pinger_message_sender
+                    ServerState::SomeDisabled | ServerState::NoneDisabled => pinger_message_sender
                         .send(PingerMessage::AppendToList(server.get_ipv4s().to_vec()))
                         .unwrap(),
-                    ServerState::SomeDisabled | ServerState::Unknown => unreachable!(),
+                    ServerState::Unknown => unreachable!(),
                 }
 
                 let server_status = server_status_info
