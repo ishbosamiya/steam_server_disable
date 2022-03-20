@@ -397,7 +397,7 @@ impl App {
         }
 
         // debug ping info
-        if true {
+        if false {
             egui::Window::new("debug_ping_info_window")
                 .vscroll(true)
                 .show(ui.ctx(), |ui| {
