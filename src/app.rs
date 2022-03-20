@@ -25,6 +25,7 @@ pub enum PingerMessage {
 
 pub enum ServerStatusMessage {
     AppendToList(Vec<(String, Vec<Ipv4Addr>)>),
+    RemoveServer(String),
     ClearList,
     KillThread,
 }
@@ -167,30 +168,40 @@ impl App {
                         );
                         list.extend(add_list.into_iter());
                     }
+                    ServerStatusMessage::RemoveServer(remove_server) => {
+                        // Remove server from list if it exists, no
+                        // error if it does not exist
+                        if let Some(server_index) =
+                            list.iter().enumerate().find_map(|(index, (server, _))| {
+                                (server == &remove_server).then(|| index)
+                            })
+                        {
+                            list.remove(server_index);
+                        }
+                    }
                     ServerStatusMessage::ClearList => list.clear(),
                     ServerStatusMessage::KillThread => unreachable!(),
                 });
 
                 if let Some((server, ip_list)) = list.pop_front() {
-                    let mut all_dropped = true;
-                    let mut one_exists = false;
-                    ip_list.into_iter().for_each(|ip| {
-                        if let Ok(exists) = firewall.is_blocked(ip) {
-                            if exists {
-                                one_exists = true;
+                    let ip_list_len = ip_list.len();
+                    let blocked_ip_list = ip_list
+                        .into_iter()
+                        .filter_map(|ip| {
+                            if let Ok(blocked) = firewall.is_blocked(ip) {
+                                blocked.then(|| ip)
                             } else {
-                                all_dropped = false;
+                                // Drop the firewall error
+                                None
                             }
-                        } else {
-                            all_dropped = false;
-                        }
-                    });
-                    let server_state = if all_dropped {
+                        })
+                        .collect::<Vec<_>>();
+                    let server_state = if blocked_ip_list.len() == ip_list_len {
                         ServerState::AllDisabled
-                    } else if one_exists {
-                        ServerState::SomeDisabled
-                    } else {
+                    } else if blocked_ip_list.is_empty() {
                         ServerState::NoneDisabled
+                    } else {
+                        ServerState::SomeDisabled(blocked_ip_list)
                     };
 
                     server_status_sender.send((server, server_state)).unwrap();
@@ -257,9 +268,9 @@ impl App {
     /// Update server status info by flushing the server status messages channel.
     fn update_server_status_info(&mut self) {
         let server_status_info = &mut self.server_status_info;
-        let ping_info = &mut self.ping_info;
         let servers = &self.servers;
         let pinger_message_sender = &self.pinger_message_sender;
+        let mut ping_info_remove_ips = Vec::new();
         self.server_status_receiver
             .try_iter()
             .for_each(|(server_abr, status)| {
@@ -269,16 +280,45 @@ impl App {
                     .find(|info| info.get_abr() == server_abr)
                     .unwrap();
 
-                match status {
-                    ServerState::AllDisabled => server.get_ipv4s().iter().for_each(|ip| {
-                        ping_info.remove(ip);
+                match &status {
+                    ServerState::AllDisabled => {
+                        server.get_ipv4s().iter().for_each(|ip| {
+                            pinger_message_sender
+                                .send(PingerMessage::RemoveFromList(*ip))
+                                .unwrap();
+                        });
+
+                        ping_info_remove_ips.extend(server.get_ipv4s().iter().copied());
+                    }
+                    ServerState::SomeDisabled(disabled_ips) => {
+                        // remove disabled ips from the list
+                        disabled_ips.iter().for_each(|ip| {
+                            pinger_message_sender
+                                .send(PingerMessage::RemoveFromList(*ip))
+                                .unwrap();
+                        });
+
+                        // tell to ping non disabled ips
                         pinger_message_sender
-                            .send(PingerMessage::RemoveFromList(*ip))
+                            .send(PingerMessage::AppendToList(
+                                server
+                                    .get_ipv4s()
+                                    .iter()
+                                    .copied()
+                                    .filter(|ip| {
+                                        !disabled_ips.iter().any(|disabled_ip| disabled_ip == ip)
+                                    })
+                                    .collect(),
+                            ))
                             .unwrap();
-                    }),
-                    ServerState::SomeDisabled | ServerState::NoneDisabled => pinger_message_sender
-                        .send(PingerMessage::AppendToList(server.get_ipv4s().to_vec()))
-                        .unwrap(),
+
+                        ping_info_remove_ips.extend(disabled_ips.iter());
+                    }
+                    ServerState::NoneDisabled => {
+                        pinger_message_sender
+                            .send(PingerMessage::AppendToList(server.get_ipv4s().to_vec()))
+                            .unwrap();
+                    }
                     ServerState::Unknown => unreachable!(),
                 }
 
@@ -287,6 +327,18 @@ impl App {
                     .or_insert(ServerState::Unknown);
                 *server_status = status;
             });
+
+        if !ping_info_remove_ips.is_empty() {
+            // hack: wait for the channel to get all the
+            // messages before flushing them
+            std::thread::sleep(Duration::from_secs(1));
+            // flush the ping messages channel
+            self.update_ping_info();
+
+            ping_info_remove_ips.iter().for_each(|ip| {
+                self.ping_info.remove(ip);
+            });
+        }
     }
 
     /// Update ping info by flushing the ping messages channel.
@@ -345,24 +397,28 @@ impl App {
         }
 
         // debug ping info
-        if false {
-            egui::Grid::new("debug_ping_info_grid")
-                .striped(true)
-                .min_col_width(ui.available_width() / 2.0)
-                .max_col_width(ui.available_width())
-                .show(ui, |ui| {
-                    self.ping_info.iter().for_each(|(ip, ping_list)| {
-                        ui.columns(2, |columns| {
-                            columns[0].label(ip.to_string());
-                            ping_list.iter().for_each(|info| {
-                                columns[1].label(match info {
-                                    Ok(ping) => ping.to_string(),
-                                    Err(_) => "Error".to_string(),
+        if true {
+            egui::Window::new("debug_ping_info_window")
+                .vscroll(true)
+                .show(ui.ctx(), |ui| {
+                    egui::Grid::new("debug_ping_info_grid")
+                        .striped(true)
+                        .min_col_width(ui.available_width() / 2.0)
+                        .max_col_width(ui.available_width())
+                        .show(ui, |ui| {
+                            self.ping_info.iter().for_each(|(ip, ping_list)| {
+                                ui.columns(2, |columns| {
+                                    columns[0].label(ip.to_string());
+                                    ping_list.iter().for_each(|info| {
+                                        columns[1].label(match info {
+                                            Ok(ping) => ping.to_string(),
+                                            Err(_) => "Error".to_string(),
+                                        });
+                                    });
                                 });
+                                ui.end_row();
                             });
                         });
-                        ui.end_row();
-                    });
                 });
         }
 
@@ -436,10 +492,9 @@ impl App {
                 let pinger_message_sender = &self.pinger_message_sender;
                 let ping_info = &mut self.ping_info;
                 let firewall = self.firewall.clone();
+                let mut ping_info_remove_ips: Option<Vec<Ipv4Addr>> = None;
                 for server in self.servers.get_servers() {
-                    let ping_info_remove_ips = ui.columns(num_columns, |columns| {
-                        let mut ping_info_remove_ips = None;
-
+                    ui.columns(num_columns, |columns| {
                         let ip_list_shown = columns[0]
                             .collapsing(server.get_abr(), |ui| {
                                 server.get_ipv4s().iter().for_each(|ip| {
@@ -449,7 +504,7 @@ impl App {
                             .body_returned
                             .is_some();
 
-                        let server_status = *server_status_info
+                        let server_status = &*server_status_info
                             .get(server.get_abr())
                             .unwrap_or(&ServerState::Unknown);
 
@@ -482,6 +537,36 @@ impl App {
                                 .unwrap();
                         }
 
+                        if ip_list_shown {
+                            server.get_ipv4s().iter().for_each(|ip| {
+                                if columns[2].button(format!("Enable {}", ip)).clicked() {
+                                    let unban_res = firewall.unban_ip(*ip);
+                                    if let Err(err) = unban_res {
+                                        log::error!("{}: {}", server.get_abr(), err);
+                                    }
+
+                                    // send message to server status checker
+                                    // to update server status
+                                    server_status_message_sender
+                                        .send(ServerStatusMessage::RemoveServer(
+                                            server.get_abr().to_string(),
+                                        ))
+                                        .unwrap();
+                                    server_status_message_sender
+                                        .send(ServerStatusMessage::AppendToList(vec![(
+                                            server.get_abr().to_string(),
+                                            server.get_ipv4s().to_vec(),
+                                        )]))
+                                        .unwrap();
+
+                                    // update pinger ip list
+                                    pinger_message_sender
+                                        .send(PingerMessage::PushToList(*ip))
+                                        .unwrap();
+                                }
+                            });
+                        }
+
                         if columns[3].button("Disable").clicked() {
                             let ban_res = server.ban(&firewall);
                             if let Err(err) = ban_res {
@@ -506,33 +591,97 @@ impl App {
                                     .unwrap();
                             });
 
-                            ping_info_remove_ips = Some(ips);
+                            if let Some(prev_removed_ips) = &mut ping_info_remove_ips {
+                                prev_removed_ips.extend(ips.into_iter());
+                            } else {
+                                ping_info_remove_ips = Some(ips);
+                            }
                         }
 
-                        if ServerState::AllDisabled == server_status {
+                        if ip_list_shown {
+                            let removed_ips = server
+                                .get_ipv4s()
+                                .iter()
+                                .filter_map(|ip| {
+                                    if columns[3].button(format!("Disable {}", ip)).clicked() {
+                                        let ban_res = firewall.ban_ip(*ip);
+                                        if let Err(err) = ban_res {
+                                            log::error!("{}: {}", server.get_abr(), err);
+                                        }
+
+                                        // send message to server status checker
+                                        // to update server status
+                                        server_status_message_sender
+                                            .send(ServerStatusMessage::RemoveServer(
+                                                server.get_abr().to_string(),
+                                            ))
+                                            .unwrap();
+                                        server_status_message_sender
+                                            .send(ServerStatusMessage::AppendToList(vec![(
+                                                server.get_abr().to_string(),
+                                                server.get_ipv4s().to_vec(),
+                                            )]))
+                                            .unwrap();
+
+                                        // update pinger ip list
+                                        pinger_message_sender
+                                            .send(PingerMessage::RemoveFromList(*ip))
+                                            .unwrap();
+
+                                        // need to remove the ip
+                                        Some(*ip)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+
+                            if !removed_ips.is_empty() {
+                                if let Some(prev_removed_ips) = &mut ping_info_remove_ips {
+                                    prev_removed_ips.extend(removed_ips.into_iter());
+                                } else {
+                                    ping_info_remove_ips = Some(removed_ips);
+                                }
+                            }
+                        }
+
+                        if let ServerState::AllDisabled = server_status {
                             columns[4].label("Disabled");
                             columns[5].label("Disabled");
                         } else {
                             let server_ping_info: Vec<_> = server
                                 .get_ipv4s()
                                 .iter()
-                                .map(|ip| Self::calculate_total_ping_for_ip(ping_info, *ip))
+                                .map(|ip| {
+                                    if ping_info.contains_key(ip) {
+                                        Some(Self::calculate_total_ping_for_ip(ping_info, *ip))
+                                    } else {
+                                        None
+                                    }
+                                })
                                 .collect();
 
                             let (server_total_ping, server_num_packets, server_lost_packets) =
-                                server_ping_info.iter().fold(
-                                    (Duration::ZERO, 0, 0),
-                                    |acc, (ping, total_num_packets, lost_packets)| {
-                                        (
-                                            acc.0 + *ping,
-                                            acc.1 + total_num_packets,
-                                            acc.2 + lost_packets,
-                                        )
-                                    },
-                                );
+                                server_ping_info
+                                    .iter()
+                                    .filter_map(|ping_info| ping_info.as_ref())
+                                    .fold(
+                                        (Duration::ZERO, 0, 0),
+                                        |acc, (ping, total_num_packets, lost_packets)| {
+                                            (
+                                                acc.0 + *ping,
+                                                acc.1 + total_num_packets,
+                                                acc.2 + lost_packets,
+                                            )
+                                        },
+                                    );
 
-                            let mut ui_ping_info =
-                                |total_ping: Duration, num_packets: usize, lost_packets: usize| {
+                            let ui_ping_info =
+                                |ping_ui: &mut egui::Ui,
+                                 loss_ui: &mut egui::Ui,
+                                 total_ping: Duration,
+                                 num_packets: usize,
+                                 lost_packets: usize| {
                                     let num_valid_packets =
                                         (num_packets - lost_packets).try_into().unwrap();
                                     let ping = if num_valid_packets == 0 {
@@ -542,42 +691,63 @@ impl App {
                                     };
 
                                     if num_packets == lost_packets {
-                                        columns[4].label("NA");
-                                        columns[5].label("100.00%");
+                                        ping_ui.label("NA");
+                                        loss_ui.label("100.00%");
                                     } else {
-                                        columns[4].label(format!("{}", PingInfo::new(ping)));
-                                        columns[5].label(format!(
+                                        ping_ui.label(format!("{}", PingInfo::new(ping)));
+                                        loss_ui.label(format!(
                                             "{:.2}%",
                                             lost_packets as f64 / num_packets as f64 * 100.0
                                         ));
                                     }
                                 };
 
+                            let (ping_ui, column_ui) = {
+                                let splits = columns.split_at_mut(5);
+                                (splits.0.last_mut().unwrap(), splits.1.first_mut().unwrap())
+                            };
+
                             ui_ping_info(
+                                ping_ui,
+                                column_ui,
                                 server_total_ping,
                                 server_num_packets,
                                 server_lost_packets,
                             );
 
                             if ip_list_shown {
-                                server_ping_info.into_iter().for_each(
-                                    |(total_ping, num_packets, lost_packets)| {
-                                        ui_ping_info(total_ping, num_packets, lost_packets);
-                                    },
-                                );
+                                server_ping_info.into_iter().for_each(|ping_info| {
+                                    if let Some((total_ping, num_packets, lost_packets)) = ping_info
+                                    {
+                                        ui_ping_info(
+                                            ping_ui,
+                                            column_ui,
+                                            total_ping,
+                                            num_packets,
+                                            lost_packets,
+                                        );
+                                    } else {
+                                        ping_ui.label("NA");
+                                        column_ui.label("100.00%");
+                                    }
+                                });
                             }
                         }
-
-                        ping_info_remove_ips
                     });
 
-                    if let Some(ip_list) = ping_info_remove_ips {
-                        for ip in ip_list.iter() {
-                            ping_info.remove(ip);
-                        }
-                    }
-
                     ui.end_row();
+                }
+
+                if let Some(ip_list) = ping_info_remove_ips {
+                    // hack: wait for the channel to get all the
+                    // messages before flushing them
+                    std::thread::sleep(Duration::from_secs(1));
+                    // flush the ping messages channel
+                    self.update_ping_info();
+
+                    for ip in ip_list.iter() {
+                        self.ping_info.remove(ip);
+                    }
                 }
             });
     }

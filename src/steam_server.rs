@@ -98,10 +98,12 @@ mod parse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerState {
     AllDisabled,
-    SomeDisabled,
+    /// Some IPs of the server are disabled. IPs that are disabled are
+    /// passed along.
+    SomeDisabled(Vec<Ipv4Addr>),
     NoneDisabled,
     Unknown,
 }
@@ -113,7 +115,7 @@ impl std::fmt::Display for ServerState {
             "{}",
             match self {
                 ServerState::AllDisabled => "All Disabled",
-                ServerState::SomeDisabled => "Some Disabled",
+                ServerState::SomeDisabled(_) => "Some Disabled",
                 ServerState::NoneDisabled => "None Disabled",
                 ServerState::Unknown => "Unknown",
             }
