@@ -771,35 +771,36 @@ impl App {
                 });
         }
 
-        let num_columns = 7;
+        let num_columns = 6;
         egui::Grid::new("ui_grid")
-            .min_col_width(ui.available_width() / num_columns as f32)
             .max_col_width(ui.available_width())
             .num_columns(num_columns)
             .striped(true)
             .show(ui, |ui| {
                 ui.columns(num_columns, |columns| {
-                    let mut all_ips_selected =
-                        self.ip_selection_status.values().all(|selected| *selected);
-                    let prev_all_ips_selected = all_ips_selected;
-                    columns[0].checkbox(&mut all_ips_selected, "");
-                    if prev_all_ips_selected != all_ips_selected {
-                        // the user selected or deselected all ips
-                        self.ip_selection_status
-                            .values_mut()
-                            .for_each(|selected| *selected = all_ips_selected);
-                    }
+                    columns[0].horizontal(|ui| {
+                        let mut all_ips_selected =
+                            self.ip_selection_status.values().all(|selected| *selected);
+                        let prev_all_ips_selected = all_ips_selected;
+                        ui.checkbox(&mut all_ips_selected, "");
+                        if prev_all_ips_selected != all_ips_selected {
+                            // the user selected or deselected all ips
+                            self.ip_selection_status
+                                .values_mut()
+                                .for_each(|selected| *selected = all_ips_selected);
+                        }
+                        ui.label("Region");
+                    });
 
-                    columns[1].label("Region");
-                    columns[2].label("State");
-                    if columns[3].button("Enable Selected").clicked() {
+                    columns[1].label("State");
+                    if columns[2].button("Enable Selected").clicked() {
                         self.enable_selected_ips();
                     }
-                    if columns[4].button("Disable Selected").clicked() {
+                    if columns[3].button("Disable Selected").clicked() {
                         self.disable_selected_ips();
                     }
-                    columns[5].label("Ping");
-                    columns[6].label("Loss");
+                    columns[4].label("Ping");
+                    columns[5].label("Loss");
                 });
                 ui.end_row();
 
@@ -811,35 +812,44 @@ impl App {
                 let mut ping_info_remove_ips: Option<Vec<Ipv4Addr>> = None;
                 for server in self.servers.get_servers() {
                     ui.columns(num_columns, |columns| {
-                        let mut all_ips_selected = server
-                            .get_ipv4s()
-                            .iter()
-                            .all(|ip| *self.ip_selection_status.entry(*ip).or_insert(false));
-                        let prev_all_ips_selected = all_ips_selected;
-                        columns[0].checkbox(&mut all_ips_selected, "");
-                        if prev_all_ips_selected != all_ips_selected {
-                            // the user selected or deselected all ips
-                            server.get_ipv4s().iter().for_each(|ip| {
-                                *self.ip_selection_status.get_mut(ip).unwrap() = all_ips_selected
-                            });
-                        }
-
-                        let ip_list_shown = columns[1]
-                            .collapsing(server.get_abr(), |ui| {
-                                server.get_ipv4s().iter().for_each(|ip| {
-                                    ui.label(ip.to_string());
+                        let ip_list_shown = columns[0]
+                            .horizontal(|ui| {
+                                let mut all_ips_selected = server.get_ipv4s().iter().all(|ip| {
+                                    *self.ip_selection_status.entry(*ip).or_insert(false)
                                 });
+                                let prev_all_ips_selected = all_ips_selected;
+                                ui.checkbox(&mut all_ips_selected, "");
+                                if prev_all_ips_selected != all_ips_selected {
+                                    // the user selected or deselected all ips
+                                    server.get_ipv4s().iter().for_each(|ip| {
+                                        *self.ip_selection_status.get_mut(ip).unwrap() =
+                                            all_ips_selected
+                                    });
+                                }
+
+                                ui.collapsing(server.get_abr(), |ui| {
+                                    server.get_ipv4s().iter().for_each(|ip| {
+                                        ui.horizontal(|ui| {
+                                            ui.checkbox(
+                                                self.ip_selection_status.get_mut(ip).unwrap(),
+                                                "",
+                                            );
+                                            ui.label(ip.to_string());
+                                        });
+                                    });
+                                })
+                                .body_returned
+                                .is_some()
                             })
-                            .body_returned
-                            .is_some();
+                            .inner;
 
                         let server_status = &*server_status_info
                             .get(server.get_abr())
                             .unwrap_or(&ServerState::Unknown);
 
-                        columns[2].label(server_status.to_string());
+                        columns[1].label(server_status.to_string());
 
-                        if columns[3].button("Enable").clicked() {
+                        if columns[2].button("Enable").clicked() {
                             Self::enable_server(
                                 server,
                                 &firewall,
@@ -850,7 +860,7 @@ impl App {
 
                         if ip_list_shown {
                             server.get_ipv4s().iter().for_each(|ip| {
-                                if columns[3].button(format!("Enable {}", ip)).clicked() {
+                                if columns[2].button(format!("Enable {}", ip)).clicked() {
                                     Self::enable_ip(
                                         *ip,
                                         server,
@@ -862,7 +872,7 @@ impl App {
                             });
                         }
 
-                        if columns[4].button("Disable").clicked() {
+                        if columns[3].button("Disable").clicked() {
                             Self::disable_server(
                                 server,
                                 &firewall,
@@ -874,7 +884,7 @@ impl App {
 
                         if ip_list_shown {
                             server.get_ipv4s().iter().for_each(|ip| {
-                                if columns[4].button(format!("Disable {}", ip)).clicked() {
+                                if columns[3].button(format!("Disable {}", ip)).clicked() {
                                     Self::disable_ip(
                                         *ip,
                                         server,
@@ -888,8 +898,8 @@ impl App {
                         }
 
                         if let ServerState::AllDisabled = server_status {
+                            columns[4].label("Disabled");
                             columns[5].label("Disabled");
-                            columns[6].label("Disabled");
                         } else {
                             let server_ping_info: Vec<_> = server
                                 .get_ipv4s()
@@ -945,7 +955,7 @@ impl App {
                                 };
 
                             let (ping_ui, column_ui) = {
-                                let splits = columns.split_at_mut(6);
+                                let splits = columns.split_at_mut(5);
                                 (splits.0.last_mut().unwrap(), splits.1.first_mut().unwrap())
                             };
 
