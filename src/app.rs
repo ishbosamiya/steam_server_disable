@@ -11,7 +11,7 @@ use crate::{
     egui,
     firewall::Firewall,
     ping::{self, PingInfo, Pinger},
-    steam_server::{ServerState, Servers},
+    steam_server::{ServerInfo, ServerState, Servers},
 };
 
 #[derive(Debug)]
@@ -33,6 +33,8 @@ pub enum ServerStatusMessage {
 pub struct App {
     servers: Servers,
     firewall: Arc<Firewall>,
+
+    ip_selection_status: HashMap<Ipv4Addr, bool>,
 
     ping_info: HashMap<Ipv4Addr, VecDeque<Result<PingInfo, ping::Error>>>,
 
@@ -212,9 +214,18 @@ impl App {
             }
         });
 
+        let servers = Servers::new();
+        let ip_selection_status = servers
+            .get_servers()
+            .iter()
+            .flat_map(|server| server.get_ipv4s().iter().map(|ip| (*ip, false)))
+            .collect();
+
         let res = Self {
-            servers: Servers::new(),
+            servers,
             firewall,
+
+            ip_selection_status,
 
             ping_info: HashMap::new(),
             pinger_message_sender,
@@ -387,6 +398,344 @@ impl App {
             .unwrap_or((Duration::ZERO, 0, 0))
     }
 
+    /// Enable all servers.
+    fn enable_all_servers(&self) {
+        for server in self.servers.get_servers().iter() {
+            let unban_res = server.unban(&self.firewall);
+            if let Err(err) = unban_res {
+                log::error!("{}: {}", server.get_abr(), err);
+            }
+
+            // send message to server status checker
+            // to update server status
+            self.server_status_message_sender
+                .send(ServerStatusMessage::AppendToList(vec![(
+                    server.get_abr().to_string(),
+                    server.get_ipv4s().to_vec(),
+                )]))
+                .unwrap();
+        }
+        self.pinger_message_sender
+            .send(PingerMessage::ClearList)
+            .unwrap();
+        self.send_currently_active_ip_list_to_pinger();
+    }
+
+    /// Disable all servers.
+    fn disable_all_servers(&mut self) {
+        for server in self.servers.get_servers().iter() {
+            let ban_res = server.ban(&self.firewall);
+            if let Err(err) = ban_res {
+                log::error!("{}: {}", server.get_abr(), err);
+            }
+
+            // send message to server status checker
+            // to update server status
+            self.server_status_message_sender
+                .send(ServerStatusMessage::AppendToList(vec![(
+                    server.get_abr().to_string(),
+                    server.get_ipv4s().to_vec(),
+                )]))
+                .unwrap();
+        }
+
+        self.pinger_message_sender
+            .send(PingerMessage::ClearList)
+            .unwrap();
+
+        // hack: wait for the channel to get all the
+        // messages before flushing them
+        std::thread::sleep(Duration::from_secs(1));
+        // flush the ping messages channel
+        self.update_ping_info();
+
+        self.ping_info.clear();
+    }
+
+    /// Enable the given server.
+    fn enable_server(
+        server: &ServerInfo,
+        firewall: &Firewall,
+        server_status_message_sender: &mpsc::Sender<ServerStatusMessage>,
+        pinger_message_sender: &mpsc::Sender<PingerMessage>,
+    ) {
+        let unban_res = server.unban(firewall);
+        if let Err(err) = unban_res {
+            log::error!("{}: {}", server.get_abr(), err);
+        }
+
+        // send message to server status checker
+        // to update server status
+        server_status_message_sender
+            .send(ServerStatusMessage::AppendToList(vec![(
+                server.get_abr().to_string(),
+                server.get_ipv4s().to_vec(),
+            )]))
+            .unwrap();
+
+        // update pinger ip list
+        let ips = server.get_ipv4s().to_vec();
+        ips.iter().for_each(|ip| {
+            pinger_message_sender
+                .send(PingerMessage::RemoveFromList(*ip))
+                .unwrap();
+        });
+        pinger_message_sender
+            .send(PingerMessage::AppendToList(ips))
+            .unwrap();
+    }
+
+    /// Disable the given server.
+    fn disable_server(
+        server: &ServerInfo,
+        firewall: &Firewall,
+        server_status_message_sender: &mpsc::Sender<ServerStatusMessage>,
+        pinger_message_sender: &mpsc::Sender<PingerMessage>,
+        ping_info_remove_ips: &mut Option<Vec<Ipv4Addr>>,
+    ) {
+        let ban_res = server.ban(firewall);
+        if let Err(err) = ban_res {
+            log::error!("{}: {}", server.get_abr(), err);
+        }
+
+        // send message to server status checker
+        // to update server status
+        server_status_message_sender
+            .send(ServerStatusMessage::AppendToList(vec![(
+                server.get_abr().to_string(),
+                server.get_ipv4s().to_vec(),
+            )]))
+            .unwrap();
+
+        let ips = server.get_ipv4s().to_vec();
+
+        // update pinger ip list
+        ips.iter().for_each(|ip| {
+            pinger_message_sender
+                .send(PingerMessage::RemoveFromList(*ip))
+                .unwrap();
+        });
+
+        if let Some(prev_removed_ips) = ping_info_remove_ips {
+            prev_removed_ips.extend(ips.into_iter());
+        } else {
+            *ping_info_remove_ips = Some(ips);
+        }
+    }
+
+    /// Enable the given IP.
+    fn enable_ip(
+        ip: Ipv4Addr,
+        server: &ServerInfo,
+        firewall: &Firewall,
+        server_status_message_sender: &mpsc::Sender<ServerStatusMessage>,
+        pinger_message_sender: &mpsc::Sender<PingerMessage>,
+    ) {
+        let unban_res = firewall.unban_ip(ip);
+        if let Err(err) = unban_res {
+            log::error!("{}: {}", server.get_abr(), err);
+        }
+
+        // send message to server status checker
+        // to update server status
+        server_status_message_sender
+            .send(ServerStatusMessage::RemoveServer(
+                server.get_abr().to_string(),
+            ))
+            .unwrap();
+        server_status_message_sender
+            .send(ServerStatusMessage::AppendToList(vec![(
+                server.get_abr().to_string(),
+                server.get_ipv4s().to_vec(),
+            )]))
+            .unwrap();
+
+        // update pinger ip list
+        pinger_message_sender
+            .send(PingerMessage::PushToList(ip))
+            .unwrap();
+    }
+
+    /// Disable the given IP.
+    fn disable_ip(
+        ip: Ipv4Addr,
+        server: &ServerInfo,
+        firewall: &Firewall,
+        server_status_message_sender: &mpsc::Sender<ServerStatusMessage>,
+        pinger_message_sender: &mpsc::Sender<PingerMessage>,
+        ping_info_remove_ips: &mut Option<Vec<Ipv4Addr>>,
+    ) {
+        let ban_res = firewall.ban_ip(ip);
+        if let Err(err) = ban_res {
+            log::error!("{}: {}", server.get_abr(), err);
+        }
+
+        // send message to server status checker
+        // to update server status
+        server_status_message_sender
+            .send(ServerStatusMessage::RemoveServer(
+                server.get_abr().to_string(),
+            ))
+            .unwrap();
+        server_status_message_sender
+            .send(ServerStatusMessage::AppendToList(vec![(
+                server.get_abr().to_string(),
+                server.get_ipv4s().to_vec(),
+            )]))
+            .unwrap();
+
+        // update pinger ip list
+        pinger_message_sender
+            .send(PingerMessage::RemoveFromList(ip))
+            .unwrap();
+
+        if let Some(prev_removed_ips) = ping_info_remove_ips {
+            prev_removed_ips.push(ip);
+        } else {
+            *ping_info_remove_ips = Some(vec![ip]);
+        }
+    }
+
+    /// Get the [`ServerSelectionStatus`] for the given
+    /// [`Servers`]. The returned vector will have the elements
+    /// correspond exactly with the given servers (so zipping the
+    /// result is possible).
+    fn servers_selection_status(
+        servers: &Servers,
+        ip_selection_status: &HashMap<Ipv4Addr, bool>,
+    ) -> Vec<ServerSelectionStatus> {
+        servers
+            .get_servers()
+            .iter()
+            .map(|server| {
+                let num_ips_selected = server
+                    .get_ipv4s()
+                    .iter()
+                    .filter(|ip| *ip_selection_status.get(*ip).unwrap_or(&false))
+                    .count();
+
+                if num_ips_selected == 0 {
+                    ServerSelectionStatus::None
+                } else if num_ips_selected == server.get_ipv4s().len() {
+                    ServerSelectionStatus::All
+                } else {
+                    ServerSelectionStatus::Some
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// Enable the IPs that are currently selected.
+    fn enable_selected_ips(&self) {
+        let servers_selected =
+            Self::servers_selection_status(&self.servers, &self.ip_selection_status);
+        if servers_selected
+            .iter()
+            .all(|selected| matches!(selected, ServerSelectionStatus::All))
+        {
+            // this is for optimization, if all the
+            // servers are selected, then it is faster
+            // to enable all the servers
+            self.enable_all_servers();
+        } else {
+            self.servers
+                .get_servers()
+                .iter()
+                .zip(servers_selected.into_iter())
+                .for_each(|(server, status)| match status {
+                    ServerSelectionStatus::All => {
+                        Self::enable_server(
+                            server,
+                            &self.firewall,
+                            &self.server_status_message_sender,
+                            &self.pinger_message_sender,
+                        );
+                    }
+                    ServerSelectionStatus::Some => {
+                        server
+                            .get_ipv4s()
+                            .iter()
+                            .filter(|ip| *self.ip_selection_status.get(ip).unwrap_or(&false))
+                            .for_each(|ip| {
+                                Self::enable_ip(
+                                    *ip,
+                                    server,
+                                    &self.firewall,
+                                    &self.server_status_message_sender,
+                                    &self.pinger_message_sender,
+                                )
+                            });
+                    }
+                    ServerSelectionStatus::None => {
+                        // do nothing
+                    }
+                });
+        }
+    }
+
+    /// Disable the IPs that are currently selected.
+    fn disable_selected_ips(&mut self) {
+        let servers_selected =
+            Self::servers_selection_status(&self.servers, &self.ip_selection_status);
+        if servers_selected
+            .iter()
+            .all(|selected| matches!(selected, ServerSelectionStatus::All))
+        {
+            // this is for optimization, if all the
+            // servers are selected, then it is faster
+            // to enable all the servers
+            self.disable_all_servers();
+        } else {
+            let mut ping_info_remove_ips: Option<Vec<Ipv4Addr>> = None;
+            self.servers
+                .get_servers()
+                .iter()
+                .zip(servers_selected.into_iter())
+                .for_each(|(server, status)| match status {
+                    ServerSelectionStatus::All => {
+                        Self::disable_server(
+                            server,
+                            &self.firewall,
+                            &self.server_status_message_sender,
+                            &self.pinger_message_sender,
+                            &mut ping_info_remove_ips,
+                        );
+                    }
+                    ServerSelectionStatus::Some => {
+                        server
+                            .get_ipv4s()
+                            .iter()
+                            .filter(|ip| *self.ip_selection_status.get(ip).unwrap_or(&false))
+                            .for_each(|ip| {
+                                Self::disable_ip(
+                                    *ip,
+                                    server,
+                                    &self.firewall,
+                                    &self.server_status_message_sender,
+                                    &self.pinger_message_sender,
+                                    &mut ping_info_remove_ips,
+                                )
+                            });
+                    }
+                    ServerSelectionStatus::None => {
+                        // do nothing
+                    }
+                });
+            if let Some(ip_list) = ping_info_remove_ips {
+                // HACK: wait for the channel to get all the
+                // messages before flushing them
+                std::thread::sleep(Duration::from_secs(1));
+                // flush the ping messages channel
+                self.update_ping_info();
+
+                for ip in ip_list.iter() {
+                    self.ping_info.remove(ip);
+                }
+            }
+        }
+    }
+
+    /// Draw the UI for the [`App`].
     pub fn draw_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Download Server List").clicked() {
             let download_file_res = Servers::download_file();
@@ -422,7 +771,7 @@ impl App {
                 });
         }
 
-        let num_columns = 6;
+        let num_columns = 7;
         egui::Grid::new("ui_grid")
             .min_col_width(ui.available_width() / num_columns as f32)
             .max_col_width(ui.available_width())
@@ -430,60 +779,27 @@ impl App {
             .striped(true)
             .show(ui, |ui| {
                 ui.columns(num_columns, |columns| {
-                    columns[0].label("Region");
-                    columns[1].label("State");
-                    if columns[2].button("Enable All").clicked() {
-                        for server in self.servers.get_servers().iter() {
-                            let unban_res = server.unban(&self.firewall);
-                            if let Err(err) = unban_res {
-                                log::error!("{}: {}", server.get_abr(), err);
-                            }
-
-                            // send message to server status checker
-                            // to update server status
-                            self.server_status_message_sender
-                                .send(ServerStatusMessage::AppendToList(vec![(
-                                    server.get_abr().to_string(),
-                                    server.get_ipv4s().to_vec(),
-                                )]))
-                                .unwrap();
-                        }
-                        self.pinger_message_sender
-                            .send(PingerMessage::ClearList)
-                            .unwrap();
-                        self.send_currently_active_ip_list_to_pinger();
+                    let mut all_ips_selected =
+                        self.ip_selection_status.values().all(|selected| *selected);
+                    let prev_all_ips_selected = all_ips_selected;
+                    columns[0].checkbox(&mut all_ips_selected, "");
+                    if prev_all_ips_selected != all_ips_selected {
+                        // the user selected or deselected all ips
+                        self.ip_selection_status
+                            .values_mut()
+                            .for_each(|selected| *selected = all_ips_selected);
                     }
-                    if columns[3].button("Disable All").clicked() {
-                        for server in self.servers.get_servers().iter() {
-                            let ban_res = server.ban(&self.firewall);
-                            if let Err(err) = ban_res {
-                                log::error!("{}: {}", server.get_abr(), err);
-                            }
 
-                            // send message to server status checker
-                            // to update server status
-                            self.server_status_message_sender
-                                .send(ServerStatusMessage::AppendToList(vec![(
-                                    server.get_abr().to_string(),
-                                    server.get_ipv4s().to_vec(),
-                                )]))
-                                .unwrap();
-                        }
-
-                        self.pinger_message_sender
-                            .send(PingerMessage::ClearList)
-                            .unwrap();
-
-                        // hack: wait for the channel to get all the
-                        // messages before flushing them
-                        std::thread::sleep(Duration::from_secs(1));
-                        // flush the ping messages channel
-                        self.update_ping_info();
-
-                        self.ping_info.clear();
+                    columns[1].label("Region");
+                    columns[2].label("State");
+                    if columns[3].button("Enable Selected").clicked() {
+                        self.enable_selected_ips();
                     }
-                    columns[4].label("Ping");
-                    columns[5].label("Loss");
+                    if columns[4].button("Disable Selected").clicked() {
+                        self.disable_selected_ips();
+                    }
+                    columns[5].label("Ping");
+                    columns[6].label("Loss");
                 });
                 ui.end_row();
 
@@ -495,7 +811,20 @@ impl App {
                 let mut ping_info_remove_ips: Option<Vec<Ipv4Addr>> = None;
                 for server in self.servers.get_servers() {
                     ui.columns(num_columns, |columns| {
-                        let ip_list_shown = columns[0]
+                        let mut all_ips_selected = server
+                            .get_ipv4s()
+                            .iter()
+                            .all(|ip| *self.ip_selection_status.entry(*ip).or_insert(false));
+                        let prev_all_ips_selected = all_ips_selected;
+                        columns[0].checkbox(&mut all_ips_selected, "");
+                        if prev_all_ips_selected != all_ips_selected {
+                            // the user selected or deselected all ips
+                            server.get_ipv4s().iter().for_each(|ip| {
+                                *self.ip_selection_status.get_mut(ip).unwrap() = all_ips_selected
+                            });
+                        }
+
+                        let ip_list_shown = columns[1]
                             .collapsing(server.get_abr(), |ui| {
                                 server.get_ipv4s().iter().for_each(|ip| {
                                     ui.label(ip.to_string());
@@ -508,146 +837,59 @@ impl App {
                             .get(server.get_abr())
                             .unwrap_or(&ServerState::Unknown);
 
-                        columns[1].label(server_status.to_string());
+                        columns[2].label(server_status.to_string());
 
-                        if columns[2].button("Enable").clicked() {
-                            let unban_res = server.unban(&firewall);
-                            if let Err(err) = unban_res {
-                                log::error!("{}: {}", server.get_abr(), err);
-                            }
-
-                            // send message to server status checker
-                            // to update server status
-                            server_status_message_sender
-                                .send(ServerStatusMessage::AppendToList(vec![(
-                                    server.get_abr().to_string(),
-                                    server.get_ipv4s().to_vec(),
-                                )]))
-                                .unwrap();
-
-                            // update pinger ip list
-                            let ips = server.get_ipv4s().to_vec();
-                            ips.iter().for_each(|ip| {
-                                pinger_message_sender
-                                    .send(PingerMessage::RemoveFromList(*ip))
-                                    .unwrap();
-                            });
-                            pinger_message_sender
-                                .send(PingerMessage::AppendToList(ips))
-                                .unwrap();
+                        if columns[3].button("Enable").clicked() {
+                            Self::enable_server(
+                                server,
+                                &firewall,
+                                server_status_message_sender,
+                                pinger_message_sender,
+                            );
                         }
 
                         if ip_list_shown {
                             server.get_ipv4s().iter().for_each(|ip| {
-                                if columns[2].button(format!("Enable {}", ip)).clicked() {
-                                    let unban_res = firewall.unban_ip(*ip);
-                                    if let Err(err) = unban_res {
-                                        log::error!("{}: {}", server.get_abr(), err);
-                                    }
-
-                                    // send message to server status checker
-                                    // to update server status
-                                    server_status_message_sender
-                                        .send(ServerStatusMessage::RemoveServer(
-                                            server.get_abr().to_string(),
-                                        ))
-                                        .unwrap();
-                                    server_status_message_sender
-                                        .send(ServerStatusMessage::AppendToList(vec![(
-                                            server.get_abr().to_string(),
-                                            server.get_ipv4s().to_vec(),
-                                        )]))
-                                        .unwrap();
-
-                                    // update pinger ip list
-                                    pinger_message_sender
-                                        .send(PingerMessage::PushToList(*ip))
-                                        .unwrap();
+                                if columns[3].button(format!("Enable {}", ip)).clicked() {
+                                    Self::enable_ip(
+                                        *ip,
+                                        server,
+                                        &firewall,
+                                        server_status_message_sender,
+                                        pinger_message_sender,
+                                    );
                                 }
                             });
                         }
 
-                        if columns[3].button("Disable").clicked() {
-                            let ban_res = server.ban(&firewall);
-                            if let Err(err) = ban_res {
-                                log::error!("{}: {}", server.get_abr(), err);
-                            }
-
-                            // send message to server status checker
-                            // to update server status
-                            server_status_message_sender
-                                .send(ServerStatusMessage::AppendToList(vec![(
-                                    server.get_abr().to_string(),
-                                    server.get_ipv4s().to_vec(),
-                                )]))
-                                .unwrap();
-
-                            let ips = server.get_ipv4s().to_vec();
-
-                            // update pinger ip list
-                            ips.iter().for_each(|ip| {
-                                pinger_message_sender
-                                    .send(PingerMessage::RemoveFromList(*ip))
-                                    .unwrap();
-                            });
-
-                            if let Some(prev_removed_ips) = &mut ping_info_remove_ips {
-                                prev_removed_ips.extend(ips.into_iter());
-                            } else {
-                                ping_info_remove_ips = Some(ips);
-                            }
+                        if columns[4].button("Disable").clicked() {
+                            Self::disable_server(
+                                server,
+                                &firewall,
+                                server_status_message_sender,
+                                pinger_message_sender,
+                                &mut ping_info_remove_ips,
+                            );
                         }
 
                         if ip_list_shown {
-                            let removed_ips = server
-                                .get_ipv4s()
-                                .iter()
-                                .filter_map(|ip| {
-                                    if columns[3].button(format!("Disable {}", ip)).clicked() {
-                                        let ban_res = firewall.ban_ip(*ip);
-                                        if let Err(err) = ban_res {
-                                            log::error!("{}: {}", server.get_abr(), err);
-                                        }
-
-                                        // send message to server status checker
-                                        // to update server status
-                                        server_status_message_sender
-                                            .send(ServerStatusMessage::RemoveServer(
-                                                server.get_abr().to_string(),
-                                            ))
-                                            .unwrap();
-                                        server_status_message_sender
-                                            .send(ServerStatusMessage::AppendToList(vec![(
-                                                server.get_abr().to_string(),
-                                                server.get_ipv4s().to_vec(),
-                                            )]))
-                                            .unwrap();
-
-                                        // update pinger ip list
-                                        pinger_message_sender
-                                            .send(PingerMessage::RemoveFromList(*ip))
-                                            .unwrap();
-
-                                        // need to remove the ip
-                                        Some(*ip)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<_>>();
-
-                            if !removed_ips.is_empty() {
-                                if let Some(prev_removed_ips) = &mut ping_info_remove_ips {
-                                    prev_removed_ips.extend(removed_ips.into_iter());
-                                } else {
-                                    ping_info_remove_ips = Some(removed_ips);
+                            server.get_ipv4s().iter().for_each(|ip| {
+                                if columns[4].button(format!("Disable {}", ip)).clicked() {
+                                    Self::disable_ip(
+                                        *ip,
+                                        server,
+                                        &firewall,
+                                        server_status_message_sender,
+                                        pinger_message_sender,
+                                        &mut ping_info_remove_ips,
+                                    );
                                 }
-                            }
+                            });
                         }
 
                         if let ServerState::AllDisabled = server_status {
-                            columns[4].label("Disabled");
                             columns[5].label("Disabled");
+                            columns[6].label("Disabled");
                         } else {
                             let server_ping_info: Vec<_> = server
                                 .get_ipv4s()
@@ -703,7 +945,7 @@ impl App {
                                 };
 
                             let (ping_ui, column_ui) = {
-                                let splits = columns.split_at_mut(5);
+                                let splits = columns.split_at_mut(6);
                                 (splits.0.last_mut().unwrap(), splits.1.first_mut().unwrap())
                             };
 
@@ -739,7 +981,7 @@ impl App {
                 }
 
                 if let Some(ip_list) = ping_info_remove_ips {
-                    // hack: wait for the channel to get all the
+                    // HACK: wait for the channel to get all the
                     // messages before flushing them
                     std::thread::sleep(Duration::from_secs(1));
                     // flush the ping messages channel
@@ -751,6 +993,16 @@ impl App {
                 }
             });
     }
+}
+
+/// Server selection status.
+enum ServerSelectionStatus {
+    /// All IPs are selected.
+    All,
+    /// Some IPs are selected.
+    Some,
+    /// No IPs are selected.
+    None,
 }
 
 impl Default for App {
