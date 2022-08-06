@@ -778,7 +778,9 @@ impl App {
             .striped(true)
             .show(ui, |ui| {
                 ui.columns(num_columns, |columns| {
-                    columns[0].horizontal(|ui| {
+                    columns[0].label("Region");
+
+                    columns[1].horizontal(|ui| {
                         let mut all_ips_selected =
                             self.ip_selection_status.values().all(|selected| *selected);
                         let prev_all_ips_selected = all_ips_selected;
@@ -789,10 +791,9 @@ impl App {
                                 .values_mut()
                                 .for_each(|selected| *selected = all_ips_selected);
                         }
-                        ui.label("Region");
-                    });
 
-                    columns[1].label("State");
+                        ui.label("State");
+                    });
                     if columns[2].button("Enable Selected").clicked() {
                         self.enable_selected_ips();
                     }
@@ -813,35 +814,34 @@ impl App {
                 for server in self.servers.get_servers() {
                     ui.columns(num_columns, |columns| {
                         let ip_list_shown = columns[0]
-                            .horizontal(|ui| {
-                                let mut all_ips_selected = server.get_ipv4s().iter().all(|ip| {
-                                    *self.ip_selection_status.entry(*ip).or_insert(false)
+                            .collapsing(server.get_abr(), |ui| {
+                                server.get_ipv4s().iter().for_each(|ip| {
+                                    ui.label(ip.to_string());
                                 });
-                                let prev_all_ips_selected = all_ips_selected;
-                                ui.checkbox(&mut all_ips_selected, "");
-                                if prev_all_ips_selected != all_ips_selected {
-                                    // the user selected or deselected all ips
-                                    server.get_ipv4s().iter().for_each(|ip| {
-                                        *self.ip_selection_status.get_mut(ip).unwrap() =
-                                            all_ips_selected
-                                    });
-                                }
-
-                                ui.collapsing(server.get_abr(), |ui| {
-                                    server.get_ipv4s().iter().for_each(|ip| {
-                                        ui.label(ip.to_string());
-                                    });
-                                })
-                                .body_returned
-                                .is_some()
                             })
-                            .inner;
+                            .body_returned
+                            .is_some();
 
                         let server_status = &*server_status_info
                             .get(server.get_abr())
                             .unwrap_or(&ServerState::Unknown);
 
-                        columns[1].label(server_status.to_string());
+                        columns[1].horizontal(|ui| {
+                            let mut all_ips_selected = server
+                                .get_ipv4s()
+                                .iter()
+                                .all(|ip| *self.ip_selection_status.entry(*ip).or_insert(false));
+                            let prev_all_ips_selected = all_ips_selected;
+                            ui.checkbox(&mut all_ips_selected, "");
+                            if prev_all_ips_selected != all_ips_selected {
+                                // the user selected or deselected all ips
+                                server.get_ipv4s().iter().for_each(|ip| {
+                                    *self.ip_selection_status.get_mut(ip).unwrap() =
+                                        all_ips_selected
+                                });
+                            }
+                            ui.label(server_status.to_string());
+                        });
 
                         if columns[2].button("Enable").clicked() {
                             Self::enable_server(
