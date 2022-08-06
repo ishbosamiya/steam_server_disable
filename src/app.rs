@@ -829,13 +829,7 @@ impl App {
 
                                 ui.collapsing(server.get_abr(), |ui| {
                                     server.get_ipv4s().iter().for_each(|ip| {
-                                        ui.horizontal(|ui| {
-                                            ui.checkbox(
-                                                self.ip_selection_status.get_mut(ip).unwrap(),
-                                                "",
-                                            );
-                                            ui.label(ip.to_string());
-                                        });
+                                        ui.label(ip.to_string());
                                     });
                                 })
                                 .body_returned
@@ -860,6 +854,8 @@ impl App {
 
                         if ip_list_shown {
                             server.get_ipv4s().iter().for_each(|ip| {
+                                columns[1]
+                                    .checkbox(self.ip_selection_status.get_mut(ip).unwrap(), "");
                                 if columns[2].button(format!("Enable {}", ip)).clicked() {
                                     Self::enable_ip(
                                         *ip,
