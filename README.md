@@ -81,7 +81,7 @@ The executable generated is portable.
 
 ## Screenshot
 
-![Version 0.2.0+](/screenshots/v0_2_0+.png)
+![Version 0.2.2+](/screenshots/v0_2_2+.png)
 
 ## TODO
 
