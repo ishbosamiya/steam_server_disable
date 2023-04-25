@@ -22,7 +22,7 @@ egui_glfw = { git = "https://github.com/ishbosamiya/egui_glfw.git", tag = "v0.2.
 glfw = "0.41"
 gl = "0.14"
 nalgebra-glm = "0.13"
-icmp-socket = "0.1"
+icmp-socket = "0.2"
 log = "0.4"
 lazy_static = "1.4"
 directories = "4.0"
@@ -33,10 +33,6 @@ sudo = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 is_elevated = "0.1"
-
-[patch.crates-io]
-# current crates io version does not support timeout correctly
-icmp-socket = { git = "https://github.com/zaphar/icmp-socket.git", branch = "master" }
 
 [profile.release-with-symbols]
 inherits = "release"
