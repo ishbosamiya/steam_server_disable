@@ -48,7 +48,11 @@ impl Download {
                 .unwrap();
             transfer.perform()?;
         }
+        let file_path = file_path.as_ref();
         std::fs::write(file_path, buf)?;
+
+        println!("info: downloaded `{}` to `{}`", url, file_path.display());
+
         Ok(())
     }
 }
