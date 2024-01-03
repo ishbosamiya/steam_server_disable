@@ -21,6 +21,11 @@ pub struct CommandLineArguments {
     /// regex.
     #[arg(long)]
     pub enable: Option<String>,
+
+    /// Disable all the IPs of the server regions matching the given
+    /// regex.
+    #[arg(long)]
+    pub disable: Option<String>,
 }
 
 fn main() {
@@ -58,6 +63,12 @@ fn main() {
         let enable = regex::Regex::new(enable).expect("Invalid `--enable` regex");
 
         app.enable_matching(&enable);
+    }
+
+    if let Some(disable) = &command_line_arguments.disable {
+        let disable = regex::Regex::new(disable).expect("Invalid `--disable` regex");
+
+        app.disable_matching(&disable);
     }
 
     if command_line_arguments.no_gui {
