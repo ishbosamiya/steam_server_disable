@@ -29,6 +29,16 @@ impl<T, U> CombineLoggers<T, U> {
     pub fn new(first: T, second: U) -> Self {
         Self { first, second }
     }
+
+    /// Get a reference to the first logger.
+    pub fn first(&self) -> &T {
+        &self.first
+    }
+
+    /// Get a reference to the second logger.
+    pub fn second(&self) -> &U {
+        &self.second
+    }
 }
 
 impl<T: Log, U: Log> Log for CombineLoggers<T, U> {
