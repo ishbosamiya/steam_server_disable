@@ -87,7 +87,10 @@ mod parse {
 
         pub fn download_file() -> Result<(), Error> {
             let file_path = file_ops::get_network_datagram_config_file_path();
-            downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json", file_path)?;
+            // `NetworkDatagramConfig.json` is no longer available on
+            // the master branch, Valve doesn't publish this file
+            // anymore, so use the latest version
+            downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/0ae12036fceb607d31a2cecb504f4ffa6f52d306/Random/NetworkDatagramConfig.json", file_path)?;
             Ok(())
         }
 
