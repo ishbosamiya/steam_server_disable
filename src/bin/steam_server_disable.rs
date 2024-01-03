@@ -1,13 +1,22 @@
 use std::sync::mpsc;
 
+use clap::Parser;
 use egui_glfw::{
     egui::{self, FontDefinitions, FontFamily, TextStyle},
     EguiBackend,
 };
 use glfw::{self, Context};
-
 use nalgebra_glm as glm;
 use steam_server_disable::{app::App, logger};
+
+/// Command line arguments for the `steam_server_disable`.
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+pub struct CommandLineArguments {
+    /// No GUI.
+    #[arg(long, default_value_t)]
+    pub no_gui: bool,
+}
 
 fn main() {
     #[cfg(unix)]
@@ -33,6 +42,16 @@ fn main() {
     if !is_running_as_sudo {
         log::error!("Not running as sudo/administrator. Rerun application as sudo/admin.");
     }
+
+    let command_line_arguments = CommandLineArguments::parse();
+
+    log::info!("command_line_arguments: {:#?}", command_line_arguments);
+
+    if command_line_arguments.no_gui {
+        return;
+    }
+
+    log::info!("starting GUI");
 
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
