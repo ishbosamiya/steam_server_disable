@@ -18,6 +18,43 @@ lazy_static! {
     };
 }
 
+/// Combine the given set of loggers.
+pub struct CombineLoggers {
+    /// Set of loggers to combine.
+    loggers: Vec<Box<dyn Log>>,
+}
+
+impl CombineLoggers {
+    /// Create a new [`CombineLoggers`].
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            loggers: Vec::new(),
+        }
+    }
+
+    /// Add a logger to the list of loggers to combine.
+    #[must_use]
+    pub fn logger(mut self, logger: impl Log + 'static) -> Self {
+        self.loggers.push(Box::new(logger));
+        self
+    }
+}
+
+impl Log for CombineLoggers {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        self.loggers.iter().any(|logger| logger.enabled(metadata))
+    }
+
+    fn log(&self, record: &log::Record) {
+        self.loggers.iter().for_each(|logger| logger.log(record));
+    }
+
+    fn flush(&self) {
+        self.loggers.iter().for_each(|logger| logger.flush());
+    }
+}
+
 pub struct EguiLogger {
     records: Mutex<VecDeque<Record>>,
     previous_ui_sizes: Mutex<Option<UiSizes>>,
