@@ -752,6 +752,38 @@ impl App {
             });
     }
 
+    /// Disable the matching IPs of the server regions matching the
+    /// given regex.
+    pub fn disable_matching(&mut self, regex: &regex::Regex) {
+        let mut ping_info_remove_ips = None;
+
+        self.servers
+            .get_servers()
+            .iter()
+            .filter(|server| regex.is_match(server.get_abr()))
+            .for_each(|server| {
+                Self::disable_server(
+                    server,
+                    &self.firewall,
+                    &self.server_status_message_sender,
+                    &self.pinger_message_sender,
+                    &mut ping_info_remove_ips,
+                );
+            });
+
+        if let Some(ip_list) = ping_info_remove_ips {
+            // HACK: wait for the channel to get all the
+            // messages before flushing them
+            std::thread::sleep(Duration::from_secs(1));
+            // flush the ping messages channel
+            self.update_ping_info();
+
+            for ip in ip_list.iter() {
+                self.ping_info.remove(ip);
+            }
+        }
+    }
+
     /// Draw the UI for the [`App`].
     pub fn draw_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Download Server List").clicked() {
