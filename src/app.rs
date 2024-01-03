@@ -735,6 +735,23 @@ impl App {
         }
     }
 
+    /// Enable the matching IPs of the server regions matching the
+    /// given regex.
+    pub fn enable_matching(&mut self, regex: &regex::Regex) {
+        self.servers
+            .get_servers()
+            .iter()
+            .filter(|server| regex.is_match(server.get_abr()))
+            .for_each(|server| {
+                Self::enable_server(
+                    server,
+                    &self.firewall,
+                    &self.server_status_message_sender,
+                    &self.pinger_message_sender,
+                );
+            });
+    }
+
     /// Draw the UI for the [`App`].
     pub fn draw_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Download Server List").clicked() {
