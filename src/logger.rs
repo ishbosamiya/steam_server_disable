@@ -11,11 +11,15 @@ use lazy_static::lazy_static;
 use log::{Level, LevelFilter, Log, SetLoggerError};
 
 lazy_static! {
-    static ref LOGGER: EguiLogger = EguiLogger {
-        records: Mutex::new(VecDeque::new()),
-        previous_ui_sizes: Mutex::new(None),
-        force_open_logging_window: AtomicBool::new(false),
-    };
+    /// Logger used for the project.
+    pub static ref LOGGER: CombineLoggers<EguiLogger, env_logger::Logger> = CombineLoggers::new(
+        EguiLogger {
+            records: Mutex::new(VecDeque::new()),
+            previous_ui_sizes: Mutex::new(None),
+            force_open_logging_window: AtomicBool::new(false),
+        },
+        env_logger::Logger::from_default_env()
+    );
 }
 
 /// Combine the two loggers.
@@ -68,11 +72,7 @@ pub struct EguiLogger {
 }
 
 pub fn init() -> Result<(), SetLoggerError> {
-    log::set_logger(get_logger()).map(|()| log::set_max_level(LevelFilter::Trace))
-}
-
-pub fn get_logger() -> &'static EguiLogger {
-    &LOGGER
+    log::set_logger(&*LOGGER).map(|()| log::set_max_level(LevelFilter::Trace))
 }
 
 impl EguiLogger {

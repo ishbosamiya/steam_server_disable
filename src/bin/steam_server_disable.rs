@@ -150,7 +150,9 @@ fn main() {
                 });
         });
 
-        logger::get_logger().draw_ui(egui.get_egui_ctx(), &mut open_logging_window);
+        logger::LOGGER
+            .first()
+            .draw_ui(egui.get_egui_ctx(), &mut open_logging_window);
 
         let (width, height) = window.get_framebuffer_size();
         let _output = egui.end_frame(glm::vec2(width as _, height as _));
@@ -190,7 +192,9 @@ fn non_sudo_gui(
 
         egui.begin_frame(&window, &mut glfw);
 
-        logger::get_logger().draw_ui(egui.get_egui_ctx(), &mut true);
+        logger::LOGGER
+            .first()
+            .draw_ui(egui.get_egui_ctx(), &mut true);
 
         let (width, height) = window.get_framebuffer_size();
         let _output = egui.end_frame(glm::vec2(width as _, height as _));
