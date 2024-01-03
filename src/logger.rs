@@ -18,40 +18,36 @@ lazy_static! {
     };
 }
 
-/// Combine the given set of loggers.
-pub struct CombineLoggers {
-    /// Set of loggers to combine.
-    loggers: Vec<Box<dyn Log>>,
+/// Combine the two loggers.
+pub struct CombineLoggers<T, U> {
+    first: T,
+    second: U,
 }
 
-impl CombineLoggers {
+impl<T, U> CombineLoggers<T, U> {
     /// Create a new [`CombineLoggers`].
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            loggers: Vec::new(),
-        }
-    }
-
-    /// Add a logger to the list of loggers to combine.
-    #[must_use]
-    pub fn logger(mut self, logger: impl Log + 'static) -> Self {
-        self.loggers.push(Box::new(logger));
-        self
+    pub fn new(first: T, second: U) -> Self {
+        Self { first, second }
     }
 }
 
-impl Log for CombineLoggers {
+impl<T: Log, U: Log> Log for CombineLoggers<T, U> {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        self.loggers.iter().any(|logger| logger.enabled(metadata))
+        let first = self.first.enabled(metadata);
+        let second = self.second.enabled(metadata);
+        first || second
     }
 
     fn log(&self, record: &log::Record) {
-        self.loggers.iter().for_each(|logger| logger.log(record));
+        // TODO: ideally, based on what is enabled, it should log only
+        // to that
+        self.first.log(record);
+        self.second.log(record);
     }
 
     fn flush(&self) {
-        self.loggers.iter().for_each(|logger| logger.flush());
+        self.first.flush();
+        self.second.flush();
     }
 }
 
