@@ -1,6 +1,6 @@
 [package]
 name = "steam_server_disable"
-version = "0.2.2+dev"
+version = "0.2.3"
 authors = ["ishbosamiya <ishbosamiya@gmail.com>"]
 edition = "2021"
 readme = "README.md"
