@@ -18,7 +18,9 @@ lazy_static! {
             previous_ui_sizes: Mutex::new(None),
             force_open_logging_window: AtomicBool::new(false),
         },
-        env_logger::Logger::from_default_env()
+        env_logger::Builder::from_env(
+            env_logger::Env::default().default_filter_or("info")
+        ).build(),
     );
 }
 
