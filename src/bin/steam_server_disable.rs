@@ -16,6 +16,11 @@ pub struct CommandLineArguments {
     /// No GUI.
     #[arg(long, default_value_t)]
     pub no_gui: bool,
+
+    /// Enable all the IPs of the server regions matching the given
+    /// regex.
+    #[arg(long)]
+    pub enable: Option<String>,
 }
 
 fn main() {
@@ -46,6 +51,14 @@ fn main() {
     let command_line_arguments = CommandLineArguments::parse();
 
     log::info!("command_line_arguments: {:#?}", command_line_arguments);
+
+    let mut app = App::new();
+
+    if let Some(enable) = &command_line_arguments.enable {
+        let enable = regex::Regex::new(enable).expect("Invalid `--enable` regex");
+
+        app.enable_matching(&enable);
+    }
 
     if command_line_arguments.no_gui {
         return;
@@ -121,8 +134,6 @@ fn main() {
 
         return;
     }
-
-    let mut app = App::new();
 
     let mut open_logging_window = false;
 
