@@ -15,10 +15,10 @@ name = "steam_server_disable"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0.125", features = ["derive"] }
-serde_json = "1.0.64"
-curl = "0.4.36"
-# `openssl-sys` depends on `curl`
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+curl = "0.4"
+# `openssl-sys`'s version depends on `curl`'s version
 #
 # `openssl-sys` has feature `vendored` so that it gets statically
 # linked, otherwise `libssl1.1` is required which not all systems have
