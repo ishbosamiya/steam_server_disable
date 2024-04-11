@@ -78,7 +78,7 @@ pub fn init() -> Result<(), SetLoggerError> {
 }
 
 impl EguiLogger {
-    pub fn draw_ui(&self, ctx: &egui::CtxRef, open_logging_window: &mut bool) {
+    pub fn draw_ui(&self, ctx: &egui::Context, open_logging_window: &mut bool) {
         if self.force_open_logging_window.swap(false, Ordering::SeqCst) {
             *open_logging_window = true;
         }

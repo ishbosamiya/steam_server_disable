@@ -25,10 +25,9 @@ curl = "0.4"
 #
 # reference: <https://github.com/cross-rs/cross/wiki/Recipes#vendored>
 openssl-sys = { version = "0.9", features = ["vendored"] }
-egui_glfw = { git = "https://github.com/ishbosamiya/egui_glfw.git", tag = "v0.2.0" }
-glfw = "0.41"
+egui_glfw = { version = "0.6.0", git = "https://github.com/ishbosamiya/egui_glfw.git", branch = "v0.6.0-release" }
+glfw = "0.53"
 gl = "0.14"
-nalgebra-glm = "0.13"
 icmp-socket = "0.2"
 log = "0.4"
 env_logger = "0.10"

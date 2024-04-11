@@ -1,11 +1,7 @@
 use std::sync::mpsc;
 
-use egui_glfw::{
-    egui::{self, FontDefinitions, FontFamily, TextStyle},
-    EguiBackend,
-};
+use egui_glfw::{egui, EguiBackend};
 use glfw::{self, Context};
-use nalgebra_glm as glm;
 use steam_server_disable::{app::App, logger};
 
 fn main() {
@@ -41,7 +37,7 @@ fn main() {
 
     log::info!("starting GUI");
 
-    let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+    let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
 
     // set to opengl 3.3 or higher
     glfw.window_hint(glfw::WindowHint::ContextVersion(3, 3));
@@ -87,18 +83,32 @@ fn main() {
 
     let mut egui = EguiBackend::new(&mut window, &mut glfw);
 
-    let mut fonts = FontDefinitions::default();
     // larger text
-    fonts
-        .family_and_size
-        .insert(TextStyle::Button, (FontFamily::Proportional, 18.0));
-    fonts
-        .family_and_size
-        .insert(TextStyle::Body, (FontFamily::Proportional, 18.0));
-    fonts
-        .family_and_size
-        .insert(TextStyle::Small, (FontFamily::Proportional, 15.0));
-    egui.get_egui_ctx().set_fonts(fonts);
+    let mut style = (*egui.get_egui_ctx().style()).clone();
+    style.text_styles = [
+        (
+            egui::TextStyle::Heading,
+            egui::FontId::new(20.0, egui::FontFamily::Proportional),
+        ),
+        (
+            egui::TextStyle::Body,
+            egui::FontId::new(18.0, egui::FontFamily::Proportional),
+        ),
+        (
+            egui::TextStyle::Monospace,
+            egui::FontId::new(16.0, egui::FontFamily::Monospace),
+        ),
+        (
+            egui::TextStyle::Button,
+            egui::FontId::new(18.0, egui::FontFamily::Proportional),
+        ),
+        (
+            egui::TextStyle::Small,
+            egui::FontId::new(16.0, egui::FontFamily::Proportional),
+        ),
+    ]
+    .into();
+    egui.get_egui_ctx().set_style(style);
 
     unsafe {
         gl::ClearColor(0.2, 0.2, 0.2, 1.0);
@@ -141,7 +151,7 @@ fn main() {
             .draw_ui(egui.get_egui_ctx(), &mut open_logging_window);
 
         let (width, height) = window.get_framebuffer_size();
-        let _output = egui.end_frame(glm::vec2(width as _, height as _));
+        let _output = egui.end_frame((width as _, height as _));
 
         window.swap_buffers();
     }
@@ -183,7 +193,7 @@ fn non_sudo_gui(
             .draw_ui(egui.get_egui_ctx(), &mut true);
 
         let (width, height) = window.get_framebuffer_size();
-        let _output = egui.end_frame(glm::vec2(width as _, height as _));
+        let _output = egui.end_frame((width as _, height as _));
 
         window.swap_buffers();
     }
