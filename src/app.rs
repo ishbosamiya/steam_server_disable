@@ -44,12 +44,20 @@ pub struct CommandLineArguments {
     /// Enable all the IPs of the server regions matching the given
     /// regex.
     #[arg(long)]
-    pub enable: Option<String>,
+    pub enable: Option<regex::Regex>,
+
+    /// Exclusion regex for `--enable`.
+    #[arg(long, requires = "enable")]
+    pub enable_exclude: Option<regex::Regex>,
 
     /// Disable all the IPs of the server regions matching the given
     /// regex.
     #[arg(long)]
-    pub disable: Option<String>,
+    pub disable: Option<regex::Regex>,
+
+    /// Exclusion regex for `--disable`.
+    #[arg(long, requires = "disable")]
+    pub disable_exclude: Option<regex::Regex>,
 
     /// Use the given network datagram config file instead.
     #[arg(long)]
@@ -73,8 +81,8 @@ pub struct App {
     server_status_receiver: mpsc::Receiver<(String, ServerState)>,
     server_status_thread_handle: Option<thread::JoinHandle<()>>,
 
-    /// [`CommandLineArguments`].
-    pub command_line_arguments: CommandLineArguments,
+    /// Is the [`App`] running in no GUI mode?
+    pub no_gui: bool,
 }
 
 impl Drop for App {
@@ -270,7 +278,7 @@ impl App {
             server_status_receiver,
             server_status_thread_handle: Some(server_status_thread_handle),
 
-            command_line_arguments,
+            no_gui: command_line_arguments.no_gui,
         };
 
         // send all the servers to the server status gatherer thread
@@ -290,16 +298,12 @@ impl App {
 
         res.send_currently_active_ip_list_to_pinger();
 
-        if let Some(enable) = &res.command_line_arguments.enable {
-            let enable = regex::Regex::new(enable).expect("Invalid `--enable` regex");
-
-            res.enable_matching(&enable);
+        if let Some(enable) = &command_line_arguments.enable {
+            res.enable_matching(&enable, command_line_arguments.enable_exclude.as_ref());
         }
 
-        if let Some(disable) = &res.command_line_arguments.disable {
-            let disable = regex::Regex::new(disable).expect("Invalid `--disable` regex");
-
-            res.disable_matching(&disable);
+        if let Some(disable) = &command_line_arguments.disable {
+            res.disable_matching(&disable, command_line_arguments.disable_exclude.as_ref());
         }
 
         res
@@ -784,11 +788,14 @@ impl App {
 
     /// Enable the matching IPs of the server regions matching the
     /// given regex.
-    pub fn enable_matching(&mut self, regex: &regex::Regex) {
+    pub fn enable_matching(&mut self, regex: &regex::Regex, exclude_regex: Option<&regex::Regex>) {
         self.servers
             .get_servers()
             .iter()
-            .filter(|server| regex.is_match(server.get_abr()))
+            .filter(|server| {
+                regex.is_match(server.get_abr())
+                    && !exclude_regex.is_some_and(|exclude| exclude.is_match(server.get_abr()))
+            })
             .for_each(|server| {
                 Self::enable_server(
                     server,
@@ -801,13 +808,16 @@ impl App {
 
     /// Disable the matching IPs of the server regions matching the
     /// given regex.
-    pub fn disable_matching(&mut self, regex: &regex::Regex) {
+    pub fn disable_matching(&mut self, regex: &regex::Regex, exclude_regex: Option<&regex::Regex>) {
         let mut ping_info_remove_ips = None;
 
         self.servers
             .get_servers()
             .iter()
-            .filter(|server| regex.is_match(server.get_abr()))
+            .filter(|server| {
+                regex.is_match(server.get_abr())
+                    && !exclude_regex.is_some_and(|exclude| exclude.is_match(server.get_abr()))
+            })
             .for_each(|server| {
                 Self::disable_server(
                     server,

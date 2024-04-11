@@ -35,7 +35,7 @@ fn main() {
 
     let mut app = App::new();
 
-    if app.command_line_arguments.no_gui {
+    if app.no_gui {
         return;
     }
 
