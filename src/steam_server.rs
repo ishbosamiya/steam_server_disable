@@ -115,14 +115,14 @@ mod parse {
                 "https://api.steampowered.com/ISteamApps/GetSDRConfig/v1/?appid=730",
                 file_path,
             )
-            .or_else(|err| {
+            .or_else(|err1| {
                 downloader::Download::from_url(
                     "https://raw.githubusercontent.com/SteamDatabase/\
                      SteamTracking/0ae12036fceb607d31a2cecb504f4ffa6f52d306/\
                      Random/NetworkDatagramConfig.json",
                     file_path,
                 )
-                .map_err(|_| err)
+                .map_err(|err2| Error::DownloaderMultiple(vec![err1, err2]))
             })?;
             Ok(())
         }
@@ -162,6 +162,7 @@ impl std::fmt::Display for ServerState {
 #[derive(Debug)]
 pub enum Error {
     Downloader(downloader::Error),
+    DownloaderMultiple(Vec<downloader::Error>),
     NoServer,
     NoRelay,
     Firewall(firewall::Error),
