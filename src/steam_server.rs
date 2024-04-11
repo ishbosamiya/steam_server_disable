@@ -36,7 +36,7 @@ mod parse {
     pub(crate) struct ServerInfo {
         desc: Option<String>,
         geo: Option<Vec<f32>>,
-        groups: Vec<String>,
+        groups: Option<Vec<String>>,
         relays: Option<Vec<RelayInfo>>,
     }
 
