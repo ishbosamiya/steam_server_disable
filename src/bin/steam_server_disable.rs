@@ -1,6 +1,5 @@
 use std::sync::mpsc;
 
-use clap::Parser;
 use egui_glfw::{
     egui::{self, FontDefinitions, FontFamily, TextStyle},
     EguiBackend,
@@ -8,25 +7,6 @@ use egui_glfw::{
 use glfw::{self, Context};
 use nalgebra_glm as glm;
 use steam_server_disable::{app::App, logger};
-
-/// Command line arguments for the `steam_server_disable`.
-#[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
-pub struct CommandLineArguments {
-    /// No GUI.
-    #[arg(long, default_value_t)]
-    pub no_gui: bool,
-
-    /// Enable all the IPs of the server regions matching the given
-    /// regex.
-    #[arg(long)]
-    pub enable: Option<String>,
-
-    /// Disable all the IPs of the server regions matching the given
-    /// regex.
-    #[arg(long)]
-    pub disable: Option<String>,
-}
 
 fn main() {
     #[cfg(unix)]
@@ -53,25 +33,9 @@ fn main() {
         log::error!("Not running as sudo/administrator. Rerun application as sudo/admin.");
     }
 
-    let command_line_arguments = CommandLineArguments::parse();
-
-    log::info!("command_line_arguments: {:#?}", command_line_arguments);
-
     let mut app = App::new();
 
-    if let Some(enable) = &command_line_arguments.enable {
-        let enable = regex::Regex::new(enable).expect("Invalid `--enable` regex");
-
-        app.enable_matching(&enable);
-    }
-
-    if let Some(disable) = &command_line_arguments.disable {
-        let disable = regex::Regex::new(disable).expect("Invalid `--disable` regex");
-
-        app.disable_matching(&disable);
-    }
-
-    if command_line_arguments.no_gui {
+    if app.command_line_arguments.no_gui {
         return;
     }
 

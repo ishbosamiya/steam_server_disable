@@ -2,10 +2,13 @@ use std::{
     collections::{HashMap, VecDeque},
     convert::TryInto,
     net::Ipv4Addr,
+    path::PathBuf,
     sync::{mpsc, Arc},
     thread,
     time::Duration,
 };
+
+use clap::Parser;
 
 use crate::{
     egui,
@@ -30,6 +33,29 @@ pub enum ServerStatusMessage {
     KillThread,
 }
 
+/// Command line arguments for the `steam_server_disable`.
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+pub struct CommandLineArguments {
+    /// No GUI.
+    #[arg(long, default_value_t)]
+    pub no_gui: bool,
+
+    /// Enable all the IPs of the server regions matching the given
+    /// regex.
+    #[arg(long)]
+    pub enable: Option<String>,
+
+    /// Disable all the IPs of the server regions matching the given
+    /// regex.
+    #[arg(long)]
+    pub disable: Option<String>,
+
+    /// Use the given network datagram config file instead.
+    #[arg(long)]
+    pub network_datagram_config: Option<PathBuf>,
+}
+
 pub struct App {
     servers: Servers,
     firewall: Arc<Firewall>,
@@ -46,6 +72,9 @@ pub struct App {
     server_status_message_sender: mpsc::Sender<ServerStatusMessage>,
     server_status_receiver: mpsc::Receiver<(String, ServerState)>,
     server_status_thread_handle: Option<thread::JoinHandle<()>>,
+
+    /// [`CommandLineArguments`].
+    pub command_line_arguments: CommandLineArguments,
 }
 
 impl Drop for App {
@@ -70,6 +99,10 @@ impl Drop for App {
 
 impl App {
     pub fn new() -> Self {
+        let command_line_arguments = CommandLineArguments::parse();
+
+        log::info!("command_line_arguments: {:#?}", command_line_arguments);
+
         let (pinger_message_sender, pinger_message_receiver) = mpsc::channel::<PingerMessage>();
         let (ping_sender, ping_receiver) =
             mpsc::channel::<(Ipv4Addr, Result<PingInfo, ping::Error>)>();
@@ -214,14 +247,14 @@ impl App {
             }
         });
 
-        let servers = Servers::new();
+        let servers = Servers::new(command_line_arguments.network_datagram_config.as_ref());
         let ip_selection_status = servers
             .get_servers()
             .iter()
             .flat_map(|server| server.get_ipv4s().iter().map(|ip| (*ip, false)))
             .collect();
 
-        let res = Self {
+        let mut res = Self {
             servers,
             firewall,
 
@@ -236,6 +269,8 @@ impl App {
             server_status_message_sender,
             server_status_receiver,
             server_status_thread_handle: Some(server_status_thread_handle),
+
+            command_line_arguments,
         };
 
         // send all the servers to the server status gatherer thread
@@ -254,6 +289,18 @@ impl App {
             .unwrap();
 
         res.send_currently_active_ip_list_to_pinger();
+
+        if let Some(enable) = &res.command_line_arguments.enable {
+            let enable = regex::Regex::new(enable).expect("Invalid `--enable` regex");
+
+            res.enable_matching(&enable);
+        }
+
+        if let Some(disable) = &res.command_line_arguments.disable {
+            let disable = regex::Regex::new(disable).expect("Invalid `--disable` regex");
+
+            res.disable_matching(&disable);
+        }
 
         res
     }
@@ -791,7 +838,7 @@ impl App {
             if let Err(err) = download_file_res {
                 log::error!("{}", err);
             }
-            self.servers = Servers::new();
+            self.servers = Servers::new(None::<PathBuf>);
         }
 
         // debug ping info

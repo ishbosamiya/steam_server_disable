@@ -1,4 +1,7 @@
-use std::net::Ipv4Addr;
+use std::{
+    net::Ipv4Addr,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     downloader,
@@ -10,9 +13,10 @@ use self::parse::ServerObject;
 mod parse {
     use serde::{Deserialize, Serialize};
 
-    use std::collections::HashMap;
     use std::fs::File;
     use std::io::prelude::*;
+    use std::path::PathBuf;
+    use std::{collections::HashMap, path::Path};
 
     use crate::{downloader, file_ops};
 
@@ -58,31 +62,47 @@ mod parse {
 
     impl Default for ServerObject {
         fn default() -> Self {
-            Self::new()
+            Self::new(None::<PathBuf>)
         }
     }
 
     impl ServerObject {
-        pub fn new() -> Self {
-            let file_path = file_ops::get_network_datagram_config_file_path();
+        pub fn new(network_datagram_config_file_path: Option<impl AsRef<Path>>) -> Self {
+            let network_datagram_config_file_path = network_datagram_config_file_path
+                .as_ref()
+                .map(|path| path.as_ref());
+            let file_path = if let Some(path) = network_datagram_config_file_path {
+                path
+            } else {
+                file_ops::get_network_datagram_config_file_path()
+            };
             let mut file = File::open(file_path)
                 .or_else(|_| {
                     match Self::download_file() {
                         Ok(_) => {}
                         Err(error) => {
                             panic!(
-                        "{} didn't exist, tried to download, check your internet connection? {}",
-                        file_path.to_str().unwrap(), error
-                    )
+                                "{} didn't exist, tried to download, \
+                                 check your internet connection? {}",
+                                file_path.to_str().unwrap(),
+                                error
+                            )
                         }
                     }
                     File::open(file_path)
                 })
-                .expect("didn't find the file, tried to download, but even that might have failed");
+                .expect(
+                    "didn't find the file, tried to download, \
+                     but even that might have failed",
+                );
             let mut json_data = String::new();
             file.read_to_string(&mut json_data).unwrap();
 
-            serde_json::from_str(&json_data).expect("network datagram config file json structure might have changed, unable to parse, contact developer")
+            serde_json::from_str(&json_data).expect(
+                "network datagram config file \
+                 json structure might have changed, \
+                 unable to parse, contact developer",
+            )
         }
 
         pub fn download_file() -> Result<(), Error> {
@@ -90,7 +110,12 @@ mod parse {
             // `NetworkDatagramConfig.json` is no longer available on
             // the master branch, Valve doesn't publish this file
             // anymore, so use the latest version
-            downloader::Download::from_url("https://raw.githubusercontent.com/SteamDatabase/SteamTracking/0ae12036fceb607d31a2cecb504f4ffa6f52d306/Random/NetworkDatagramConfig.json", file_path)?;
+            downloader::Download::from_url(
+                "https://raw.githubusercontent.com/SteamDatabase/\
+                 SteamTracking/0ae12036fceb607d31a2cecb504f4ffa6f52d306/\
+                 Random/NetworkDatagramConfig.json",
+                file_path,
+            )?;
             Ok(())
         }
 
@@ -193,8 +218,8 @@ pub struct Servers {
 }
 
 impl Servers {
-    pub fn new() -> Self {
-        ServerObject::new().into()
+    pub fn new(network_datagram_config_file_path: Option<impl AsRef<Path>>) -> Self {
+        ServerObject::new(network_datagram_config_file_path).into()
     }
 
     pub fn download_file() -> Result<(), Error> {
@@ -209,7 +234,7 @@ impl Servers {
 
 impl Default for Servers {
     fn default() -> Self {
-        Self::new()
+        Self::new(None::<PathBuf>)
     }
 }
 
