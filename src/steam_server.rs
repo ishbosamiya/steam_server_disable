@@ -108,14 +108,22 @@ mod parse {
         pub fn download_file() -> Result<(), Error> {
             let file_path = file_ops::get_network_datagram_config_file_path();
             // `NetworkDatagramConfig.json` is no longer available on
-            // the master branch, Valve doesn't publish this file
-            // anymore, so use the latest version
+            // the master branch of `SteamDatabase`, so use the latest
+            // available version as a fallback if the json file is not
+            // available on the steam website
             downloader::Download::from_url(
-                "https://raw.githubusercontent.com/SteamDatabase/\
-                 SteamTracking/0ae12036fceb607d31a2cecb504f4ffa6f52d306/\
-                 Random/NetworkDatagramConfig.json",
+                "https://api.steampowered.com/ISteamApps/GetSDRConfig/v1/?appid=730",
                 file_path,
-            )?;
+            )
+            .or_else(|err| {
+                downloader::Download::from_url(
+                    "https://raw.githubusercontent.com/SteamDatabase/\
+                     SteamTracking/0ae12036fceb607d31a2cecb504f4ffa6f52d306/\
+                     Random/NetworkDatagramConfig.json",
+                    file_path,
+                )
+                .map_err(|_| err)
+            })?;
             Ok(())
         }
 
