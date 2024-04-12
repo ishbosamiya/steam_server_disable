@@ -34,10 +34,10 @@ mod parse {
 
     #[derive(Serialize, Deserialize)]
     pub(crate) struct ServerInfo {
-        desc: Option<String>,
-        geo: Option<Vec<f32>>,
-        groups: Option<Vec<String>>,
-        relays: Option<Vec<RelayInfo>>,
+        pub desc: Option<String>,
+        pub geo: Option<Vec<f32>>,
+        pub groups: Option<Vec<String>>,
+        pub relays: Option<Vec<RelayInfo>>,
     }
 
     impl ServerInfo {
@@ -49,8 +49,8 @@ mod parse {
 
     #[derive(Serialize, Deserialize)]
     pub(crate) struct RelayInfo {
-        ipv4: String,
-        port_range: Vec<usize>,
+        pub ipv4: String,
+        pub port_range: Vec<usize>,
     }
 
     impl RelayInfo {
@@ -189,8 +189,13 @@ impl From<firewall::Error> for Error {
 
 impl std::error::Error for Error {}
 
+/// Server info.
 pub struct ServerInfo {
+    /// Abreviation of the server.
     abr: String,
+    /// Description of the server.
+    desc: Option<String>,
+    /// [`Ipv4Addr`]s of the server.
     ipv4s: Vec<Ipv4Addr>,
 }
 
@@ -219,6 +224,11 @@ impl ServerInfo {
     /// Get a reference to the server info's abr.
     pub fn get_abr(&self) -> &str {
         self.abr.as_ref()
+    }
+
+    /// Get a reference to the [`ServerInfo`]'s description.
+    pub fn desc(&self) -> Option<&str> {
+        self.desc.as_deref()
     }
 }
 
@@ -260,6 +270,7 @@ impl From<ServerObject> for Servers {
                     .collect();
                 Some(ServerInfo {
                     abr: server.to_string(),
+                    desc: info.desc.clone(),
                     ipv4s,
                 })
             })
