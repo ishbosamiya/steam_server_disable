@@ -919,14 +919,20 @@ impl App {
                 let mut ping_info_remove_ips: Option<Vec<Ipv4Addr>> = None;
                 for server in self.servers.get_servers() {
                     ui.columns(num_columns, |columns| {
-                        let ip_list_shown = columns[0]
-                            .collapsing(server.get_abr(), |ui| {
+                        let region_with_ips_response =
+                            columns[0].collapsing(server.get_abr(), |ui| {
                                 server.get_ipv4s().iter().for_each(|ip| {
                                     ui.label(ip.to_string());
                                 });
-                            })
-                            .body_returned
-                            .is_some();
+                            });
+
+                        if let Some(server_description) = server.desc() {
+                            region_with_ips_response
+                                .header_response
+                                .on_hover_text(server_description);
+                        }
+
+                        let ip_list_shown = region_with_ips_response.body_returned.is_some();
 
                         let server_status = &*server_status_info
                             .get(server.get_abr())
