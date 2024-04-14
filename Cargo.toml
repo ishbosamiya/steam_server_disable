@@ -36,6 +36,12 @@ directories = "4.0"
 regex = "1.10"
 clap = { version = "4.0", features = ["derive", "env"] }
 
+[patch.crates-io]
+# reason for `glfw-sys` patch, `glfw-sys` has linker errors on windows
+# without this patch due to `CMAKE_MSVC_RUNTIME_LIBRARY` not being
+# defined for `MultiThreaded`
+glfw-sys = { git = "https://github.com/ishbosamiya/glfw-sys.git" }
+
 [target.'cfg(unix)'.dependencies]
 iptables = "0.4.3"
 sudo = "0.6"
