@@ -8,6 +8,13 @@ description = "A GUI tool to block access to Steam (CSGO/Dota) servers region-wi
 homepage = "https://github.com/ishbosamiya/steam_server_disable"
 repository = "https://github.com/ishbosamiya/steam_server_disable"
 keywords = ["steam", "firewall", "gui"]
+publish = false
+
+[package.metadata.wix]
+upgrade-guid = "346463D7-CAA7-4E85-BA1E-19B5A82EA7FC"
+path-guid = "9DDA6A2E-F90F-4CCA-A0B5-69468AF1804B"
+license = false
+eula = false
 
 [[bin]]
 name = "steam_server_disable"
@@ -52,3 +59,31 @@ is_elevated = "0.1"
 [profile.release-with-symbols]
 inherits = "release"
 debug = true
+
+# The profile that 'cargo dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+# Config for 'cargo dist'
+[workspace.metadata.dist]
+# The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.13.1"
+# CI backends to support
+ci = ["github"]
+# The installers to generate for each app
+installers = ["shell", "msi"]
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# Publish jobs to run in CI
+pr-run-mode = "plan"
+# Whether to install an updater program
+install-updater = false
+# Whether to consider the binaries in a package for distribution (defaults true)
+dist = true
+
+# `linux` build dependencies
+[workspace.metadata.dist.dependencies.apt]
+cmake = "*"
+libxrandr-dev = "*"
+xorg-dev = "*"
