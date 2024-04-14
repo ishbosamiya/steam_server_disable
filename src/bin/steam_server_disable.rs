@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use egui_glfw::{egui, EguiBackend};
 use glfw::{self, Context};
 use steam_server_disable::{app::App, logger};
@@ -171,8 +169,8 @@ fn handle_window_events(event: &glfw::WindowEvent, open_logging_window: &mut boo
 
 fn non_sudo_gui(
     mut glfw: glfw::Glfw,
-    mut window: glfw::Window,
-    events: mpsc::Receiver<(f64, glfw::WindowEvent)>,
+    mut window: glfw::PWindow,
+    events: glfw::GlfwReceiver<(f64, glfw::WindowEvent)>,
     mut egui: egui_glfw::EguiBackend,
 ) {
     while !window.should_close() {
