@@ -7,7 +7,7 @@ from some region is not optimal.
 ## Features
 
 * Cross Platform (Linux and Windows)
-* GUI
+* GUI and CLI
 * Real-time ping + loss check
 
 ## Note
@@ -38,37 +38,6 @@ future by using `ufw` instead.
 
 Download the appropriate file from
 [Releases](https://github.com/ishbosamiya/steam_server_disable/releases).
-
-##### Windows
-
-Completely portable. See [Usage](#usage).
-
-##### Linux (Debian/Ubuntu/Pop!_OS)
-
-``` shell
-sudo dpkg -i steam_server_disable_*_.deb
-```
-
-##### Linux (Portable)
-
-Extract file then see [Usage](#usage).
-
-## Usage
-### Windows
-
-Right click -> Run as Administrator
-
-### Linux (Debian/Ubuntu/Pop!_OS)
-
-``` shell
-steam_server_disable
-```
-
-### Linux (Portable)
-
-``` shell
-./steam_server_disable
-```
 
 ## Build
 
