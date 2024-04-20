@@ -81,6 +81,8 @@ pr-run-mode = "plan"
 install-updater = false
 # Whether to consider the binaries in a package for distribution (defaults true)
 dist = true
+# Whether CI should trigger releases with dispatches instead of tag pushes
+dispatch-releases = true
 
 # `linux` build dependencies
 [workspace.metadata.dist.dependencies.apt]
