@@ -13,6 +13,7 @@ publish = false
 [package.metadata.wix]
 upgrade-guid = "346463D7-CAA7-4E85-BA1E-19B5A82EA7FC"
 path-guid = "9DDA6A2E-F90F-4CCA-A0B5-69468AF1804B"
+shortcut-guid = "1ACFF61E-4E43-45CD-8259-E93CB49DF229"
 license = false
 eula = false
 
@@ -83,6 +84,8 @@ install-updater = false
 dist = true
 # Whether CI should trigger releases with dispatches instead of tag pushes
 dispatch-releases = true
+# Skip checking whether the specified configuration files are up to date
+allow-dirty = ["msi"]
 
 # `linux` build dependencies
 [workspace.metadata.dist.dependencies.apt]
