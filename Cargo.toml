@@ -18,10 +18,8 @@ shortcut-guid = "1ACFF61E-4E43-45CD-8259-E93CB49DF229"
 # NOTE: update `package.version` as well
 #
 # requires separate version because `+dev` syntax isn't supported by
-# wix, so make it a number only based version, but not changing
-# `package.version` since `+dev` is more clear about the intent than
-# having another sub version number after patch version
-version = "0.2.6.1"
+# wix
+version = "0.2.6"
 license = false
 eula = false
 
