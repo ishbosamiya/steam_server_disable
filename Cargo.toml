@@ -1,5 +1,6 @@
 [package]
 name = "steam_server_disable"
+# NOTE: update `package.metadata.wix.version` as well
 version = "0.2.6+dev"
 authors = ["ishbosamiya <ishbosamiya@gmail.com>"]
 edition = "2021"
@@ -14,6 +15,13 @@ publish = false
 upgrade-guid = "346463D7-CAA7-4E85-BA1E-19B5A82EA7FC"
 path-guid = "9DDA6A2E-F90F-4CCA-A0B5-69468AF1804B"
 shortcut-guid = "1ACFF61E-4E43-45CD-8259-E93CB49DF229"
+# NOTE: update `package.version` as well
+#
+# requires separate version because `+dev` syntax isn't supported by
+# wix, so make it a number only based version, but not changing
+# `package.version` since `+dev` is more clear about the intent than
+# having another sub version number after patch version
+version = "0.2.6.1"
 license = false
 eula = false
 
