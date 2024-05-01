@@ -140,11 +140,20 @@
 
 	<DirectoryRef Id="ApplicationProgramsFolder">
           <Component Id="ApplicationShortcut" Guid="1ACFF61E-4E43-45CD-8259-E93CB49DF229">
+	    <!-- executable shortcut -->
             <Shortcut Id="ApplicationStartMenuShortcut"
                       Name="steam_server_disable"
                       Description="A GUI tool to block access to Steam (CSGO/Dota) servers region-wise."
                       Target="[#exe0]"
                       WorkingDirectory="APPLICATIONROOTDIRECTORY"/>
+
+	    <!-- uninstaller shortcut -->
+	    <Shortcut Id="UninstallProduct"
+		      Name="uninstaller"
+		      Target="[SystemFolder]msiexec.exe"
+		      Arguments="/x [ProductCode]"
+		      Description="Uninstalls steam_server_disable" />
+
             <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
             <RegistryValue Root="HKCU" Key="Software\ishbosamiya\steam_server_disable" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
           </Component>
