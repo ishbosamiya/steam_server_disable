@@ -134,14 +134,14 @@
 
 	    <!-- Define program start menu shortcut folder -->
 	    <Directory Id="ProgramMenuFolder">
-	      <Directory Id="ApplicationProgramsFolder" Name="Steam server disable"/>
+	      <Directory Id="ApplicationProgramsFolder" Name="steam_server_disable"/>
 	    </Directory>
         </Directory>
 
 	<DirectoryRef Id="ApplicationProgramsFolder">
           <Component Id="ApplicationShortcut" Guid="1ACFF61E-4E43-45CD-8259-E93CB49DF229">
             <Shortcut Id="ApplicationStartMenuShortcut"
-                      Name="Steam server disable"
+                      Name="steam_server_disable"
                       Description="A GUI tool to block access to Steam (CSGO/Dota) servers region-wise."
                       Target="[#exe0]"
                       WorkingDirectory="APPLICATIONROOTDIRECTORY"/>
