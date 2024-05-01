@@ -7,7 +7,7 @@ name = "steam_server_disable"
 # * `package.metadata.wix.version`
 #
 # * CHANGELOG.md
-version = "0.2.7"
+version = "0.2.7+dev"
 authors = ["ishbosamiya <ishbosamiya@gmail.com>"]
 edition = "2021"
 readme = "README.md"
