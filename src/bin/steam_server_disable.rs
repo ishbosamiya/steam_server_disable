@@ -140,7 +140,7 @@ fn main() {
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    app.draw_ui(ui);
+                    app.ui(ui, egui::Id::new("app"));
                 });
         });
 

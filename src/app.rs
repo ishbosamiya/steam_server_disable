@@ -116,6 +116,9 @@ pub struct App {
 
     /// Is the [`App`] running in no GUI mode?
     pub no_gui: bool,
+
+    /// Currently active [`AppMode`].
+    pub app_mode: AppMode,
 }
 
 impl Drop for App {
@@ -312,6 +315,8 @@ impl App {
             server_status_thread_handle: Some(server_status_thread_handle),
 
             no_gui: command_line_arguments.no_gui,
+
+            app_mode: AppMode::Grid,
         };
 
         // send all the servers to the server status gatherer thread
@@ -874,15 +879,23 @@ impl App {
         }
     }
 
-    /// Draw the UI for the [`App`].
-    pub fn draw_ui(&mut self, ui: &mut egui::Ui) {
-        if ui.button("Download Server List").clicked() {
-            let download_file_res = Servers::download_file();
-            if let Err(err) = download_file_res {
-                log::error!("{}", err);
+    /// Create the UI for the [`App`].
+    pub fn ui(&mut self, ui: &mut egui::Ui, id: egui::Id) {
+        ui.horizontal(|ui| {
+            if ui.button("Download Server List").clicked() {
+                let download_file_res = Servers::download_file();
+                if let Err(err) = download_file_res {
+                    log::error!("{}", err);
+                }
+                self.servers = Servers::new(None::<PathBuf>);
             }
-            self.servers = Servers::new(None::<PathBuf>);
-        }
+
+            ui.separator();
+
+            ui.label("App mode:");
+
+            self.app_mode.ui(ui, id.with("app_mode"));
+        });
 
         // debug ping info
         if false {
