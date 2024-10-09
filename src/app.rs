@@ -1242,3 +1242,71 @@ impl Default for App {
         Self::new()
     }
 }
+
+/// Servers on the map.
+pub struct ServersOnMap<'a> {
+    /// Servers.
+    pub servers: &'a [ServerInfo],
+
+    /// Server status info.
+    pub server_status_info: &'a HashMap<String, ServerState>,
+}
+
+impl<'a> ServersOnMap<'a> {
+    /// Paint the given [`ServerInfo`] at the given screen position.
+    pub fn paint_server(
+        server_info: &ServerInfo,
+        server_state: &ServerState,
+        screen_position: egui::Pos2,
+        painter: &egui::Painter,
+    ) {
+        let style = painter.ctx().style();
+        let non_interactive_visuals = style.noninteractive();
+
+        let label_galley = painter.layout_no_wrap(
+            server_info.get_abr().to_string(),
+            egui::FontId::monospace(12.0),
+            non_interactive_visuals.text_color(),
+        );
+
+        let label_offset = egui::vec2(8.0, 8.0);
+
+        painter.rect_filled(
+            label_galley
+                .rect
+                .translate(screen_position.to_vec2())
+                .translate(label_offset)
+                .expand(5.0),
+            10.0,
+            non_interactive_visuals.bg_fill,
+        );
+
+        painter.galley(
+            screen_position + label_offset,
+            label_galley,
+            // shouldn't require a fallback colour
+            egui::Color32::RED,
+        );
+
+        let (circle_fill, circle_stroke) = match server_state {
+            ServerState::AllDisabled => (
+                egui::Color32::RED.linear_multiply(0.3),
+                egui::Stroke::new(1.0, egui::Color32::RED),
+            ),
+            ServerState::SomeDisabled(_) => (
+                egui::Color32::YELLOW.linear_multiply(0.3),
+                egui::Stroke::new(1.0, egui::Color32::YELLOW),
+            ),
+            ServerState::NoneDisabled => (
+                egui::Color32::GREEN.linear_multiply(0.3),
+                egui::Stroke::new(1.0, egui::Color32::GREEN),
+            ),
+            ServerState::Unknown => (
+                egui::Color32::BLUE.linear_multiply(0.3),
+                egui::Stroke::new(1.0, egui::Color32::BLUE),
+            ),
+        };
+
+        painter.circle(screen_position, 4.0, circle_fill, circle_stroke);
+    }
+}
