@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, VecDeque},
-    convert::TryInto,
     net::Ipv4Addr,
     path::PathBuf,
     sync::{mpsc, Arc},
@@ -923,6 +922,16 @@ impl App {
                 });
         }
 
+        match self.app_mode {
+            AppMode::Grid => {
+                self.ui_grid_mode(ui, id.with("__grid_mode"));
+            }
+            AppMode::Map => todo!(),
+        }
+    }
+
+    /// Create the UI for the [`App`] in [`AppMode::Grid`].
+    pub fn ui_grid_mode(&mut self, ui: &mut egui::Ui, _id: egui::Id) {
         let num_columns = 6;
         egui::Grid::new("ui_grid")
             .max_col_width(ui.available_width())
@@ -1088,18 +1097,14 @@ impl App {
                                  total_ping: Duration,
                                  num_packets: usize,
                                  lost_packets: usize| {
-                                    let num_valid_packets =
-                                        (num_packets - lost_packets).try_into().unwrap();
-                                    let ping = if num_valid_packets == 0 {
-                                        total_ping
-                                    } else {
-                                        total_ping / num_valid_packets
-                                    };
-
                                     if num_packets == lost_packets {
                                         ping_ui.label("NA");
                                         loss_ui.label("100.00%");
                                     } else {
+                                        let num_valid_packets = num_packets - lost_packets;
+                                        let ping =
+                                            total_ping / u32::try_from(num_valid_packets).unwrap();
+
                                         ping_ui.label(format!("{}", PingInfo::new(ping)));
                                         loss_ui.label(format!(
                                             "{:.2}%",
