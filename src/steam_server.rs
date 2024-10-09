@@ -197,6 +197,8 @@ pub struct ServerInfo {
     desc: Option<String>,
     /// [`Ipv4Addr`]s of the server.
     ipv4s: Vec<Ipv4Addr>,
+    /// Geo location.
+    geo: Option<[f32; 2]>,
 }
 
 impl ServerInfo {
@@ -229,6 +231,11 @@ impl ServerInfo {
     /// Get a reference to the [`ServerInfo`]'s description.
     pub fn desc(&self) -> Option<&str> {
         self.desc.as_deref()
+    }
+
+    /// Get the geo location of the server.
+    pub fn geo(&self) -> Option<&[f32; 2]> {
+        self.geo.as_ref()
     }
 }
 
@@ -272,6 +279,11 @@ impl From<ServerObject> for Servers {
                     abr: server.to_string(),
                     desc: info.desc.clone(),
                     ipv4s,
+                    geo: info
+                        .geo
+                        .as_ref()
+                        .and_then(|geo| <&[f32; 2]>::try_from(geo.as_slice()).ok())
+                        .cloned(),
                 })
             })
             .collect();
