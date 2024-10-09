@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, VecDeque},
     net::Ipv4Addr,
     path::PathBuf,
@@ -1308,5 +1309,39 @@ impl<'a> ServersOnMap<'a> {
         };
 
         painter.circle(screen_position, 4.0, circle_fill, circle_stroke);
+    }
+}
+
+impl<'a> walkers::Plugin for ServersOnMap<'a> {
+    fn run(
+        &mut self,
+        _response: &egui::Response,
+        painter: egui::Painter,
+        projector: &walkers::Projector,
+    ) {
+        self.servers
+            .iter()
+            .filter_map(|server_info| {
+                let geo = server_info.geo()?;
+                let server_status = self
+                    .server_status_info
+                    .get(server_info.get_abr())
+                    .map(Cow::Borrowed)
+                    .unwrap_or_else(|| Cow::Owned(ServerState::Unknown));
+                Some((server_info, geo, server_status))
+            })
+            .for_each(|(server_info, geo, server_status)| {
+                Self::paint_server(
+                    server_info,
+                    &server_status,
+                    projector
+                        .project(walkers::Position::from_lon_lat(
+                            geo[0].into(),
+                            geo[1].into(),
+                        ))
+                        .to_pos2(),
+                    &painter,
+                );
+            });
     }
 }
