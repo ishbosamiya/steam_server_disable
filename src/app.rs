@@ -1202,11 +1202,28 @@ impl App {
             ui.label(self.map_memory.zoom().to_string());
         });
 
-        ui.add(walkers::Map::new(
-            Some(self.map_tiles.as_mut().expect("is initialized by now")),
-            &mut self.map_memory,
-            walkers::Position::from_lat_lon(0.0, 0.0),
-        ));
+        ui.add(
+            walkers::Map::new(
+                Some(self.map_tiles.as_mut().expect("is initialized by now")),
+                &mut self.map_memory,
+                walkers::Position::from_lon_lat(0.0, 0.0),
+            )
+            .with_plugin(walkers::extras::Places::new(
+                self.servers
+                    .get_servers()
+                    .iter()
+                    .filter_map(|server| {
+                        let geo = server.geo()?;
+                        Some(walkers::extras::Place {
+                            position: walkers::Position::from_lon_lat(geo[0].into(), geo[1].into()),
+                            label: server.get_abr().to_string(),
+                            symbol: ' ',
+                            style: walkers::extras::Style::default(),
+                        })
+                    })
+                    .collect(),
+            )),
+        );
     }
 }
 
