@@ -118,6 +118,16 @@ pub struct App {
 
     /// Currently active [`AppMode`].
     pub app_mode: AppMode,
+
+    /// [`walkers::HttpTiles`] for the map.
+    ///
+    /// Is [`Some`] if it has been initialized, is expected to be
+    /// initialized only once. Cannot use [`std::cell::OnceCell`]
+    /// because need a mutable reference to it.
+    pub map_tiles: Option<walkers::HttpTiles>,
+
+    /// [`walkers::MapMemory`].
+    pub map_memory: walkers::MapMemory,
 }
 
 impl Drop for App {
@@ -316,6 +326,13 @@ impl App {
             no_gui: command_line_arguments.no_gui,
 
             app_mode: AppMode::Grid,
+
+            map_tiles: None,
+            map_memory: {
+                let mut map_memory = walkers::MapMemory::default();
+                map_memory.set_zoom(2.0).expect("valid zoom level");
+                map_memory
+            },
         };
 
         // send all the servers to the server status gatherer thread
@@ -926,7 +943,9 @@ impl App {
             AppMode::Grid => {
                 self.ui_grid_mode(ui, id.with("__grid_mode"));
             }
-            AppMode::Map => todo!(),
+            AppMode::Map => {
+                self.ui_map_mode(ui, id.with("__map_mode"));
+            }
         }
     }
 
@@ -1161,6 +1180,33 @@ impl App {
                     }
                 }
             });
+    }
+
+    /// Create the UI for the [`App`] in [`AppMode::Map`].
+    pub fn ui_map_mode(&mut self, ui: &mut egui::Ui, _id: egui::Id) {
+        if self.map_tiles.is_none() {
+            self.map_tiles = Some(walkers::HttpTiles::new(
+                walkers::sources::OpenStreetMap,
+                ui.ctx().clone(),
+            ));
+        }
+
+        ui.horizontal(|ui| {
+            ui.label("Zoom:");
+            if ui.button("+").clicked() {
+                let _ = self.map_memory.zoom_in();
+            }
+            if ui.button("-").clicked() {
+                let _ = self.map_memory.zoom_out();
+            }
+            ui.label(self.map_memory.zoom().to_string());
+        });
+
+        ui.add(walkers::Map::new(
+            Some(self.map_tiles.as_mut().expect("is initialized by now")),
+            &mut self.map_memory,
+            walkers::Position::from_lat_lon(0.0, 0.0),
+        ));
     }
 }
 
