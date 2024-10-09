@@ -1209,21 +1209,10 @@ impl App {
                 &mut self.map_memory,
                 walkers::Position::from_lon_lat(0.0, 0.0),
             )
-            .with_plugin(walkers::extras::Places::new(
-                self.servers
-                    .get_servers()
-                    .iter()
-                    .filter_map(|server| {
-                        let geo = server.geo()?;
-                        Some(walkers::extras::Place {
-                            position: walkers::Position::from_lon_lat(geo[0].into(), geo[1].into()),
-                            label: server.get_abr().to_string(),
-                            symbol: ' ',
-                            style: walkers::extras::Style::default(),
-                        })
-                    })
-                    .collect(),
-            )),
+            .with_plugin(ServersOnMap {
+                servers: self.servers.get_servers(),
+                server_status_info: &self.server_status_info,
+            }),
         );
     }
 }
@@ -1270,15 +1259,19 @@ impl<'a> ServersOnMap<'a> {
             non_interactive_visuals.text_color(),
         );
 
-        let label_offset = egui::vec2(8.0, 8.0);
+        let label_offset = egui::vec2(
+            10.0,
+            // shift it from top left to center left
+            -label_galley.rect.height() * 0.5,
+        );
 
         painter.rect_filled(
             label_galley
                 .rect
                 .translate(screen_position.to_vec2())
                 .translate(label_offset)
-                .expand(5.0),
-            10.0,
+                .expand(3.0),
+            4.0,
             non_interactive_visuals.bg_fill,
         );
 
