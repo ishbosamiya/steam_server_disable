@@ -63,6 +63,40 @@ pub struct CommandLineArguments {
     pub network_datagram_config: Option<PathBuf>,
 }
 
+/// [`App`] mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AppMode {
+    Grid,
+    Map,
+}
+
+impl std::fmt::Display for AppMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppMode::Grid => write!(f, "Grid"),
+            AppMode::Map => write!(f, "Map"),
+        }
+    }
+}
+
+impl AppMode {
+    /// Get all the [`AppMode`]s.
+    pub const fn all() -> [Self; 2] {
+        [Self::Grid, Self::Map]
+    }
+
+    /// Create the UI for [`AppMode`].
+    pub fn ui(&mut self, ui: &mut egui::Ui, id: egui::Id) {
+        egui::ComboBox::from_id_source(id)
+            .selected_text(self.to_string())
+            .show_ui(ui, |ui| {
+                Self::all().into_iter().for_each(|app_mode| {
+                    ui.selectable_value(self, app_mode, app_mode.to_string());
+                });
+            });
+    }
+}
+
 pub struct App {
     servers: Servers,
     firewall: Arc<Firewall>,
