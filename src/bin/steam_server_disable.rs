@@ -1,4 +1,4 @@
-use egui_glfw::{egui, EguiBackend};
+use egui_glfw::EguiBackend;
 use glfw::{self, Context};
 use steam_server_disable::{app::App, logger};
 

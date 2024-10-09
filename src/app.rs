@@ -11,7 +11,6 @@ use std::{
 use clap::Parser;
 
 use crate::{
-    egui,
     firewall::Firewall,
     ping::{self, PingInfo, Pinger},
     steam_server::{ServerInfo, ServerState, Servers},

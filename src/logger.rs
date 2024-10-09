@@ -84,7 +84,7 @@ impl EguiLogger {
         }
 
         egui::Window::new("Logging Window")
-            .scroll2([true, true])
+            .scroll([true, true])
             .open(open_logging_window)
             .show(ctx, |ui| {
                 let records = self.records.lock().unwrap();
